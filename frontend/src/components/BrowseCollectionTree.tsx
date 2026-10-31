@@ -10,6 +10,7 @@
  * dragging takes it to the top level; Alt+↑ / Alt+↓ (Alt+← out one level) on a focused row. */
 import { Archive, ChevronRight, CircleAlert, Layers, ListChecks, Plus } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { type CollectionRow, useCollections } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { type Dragged, readDragCollection, readFilesOrCollection, setDragCollection, useDropTarget } from "../dnd";
@@ -372,37 +373,43 @@ export function CollectionTree({
         )}
       </ul>
       {menu.element}
-      {deleting && (
-        <DeleteCollectionSheet
-          c={deleting}
-          onCancel={() => setDeleting(null)}
-          onDone={(_, names) => {
-            setDeleting(null);
-            onDeleted?.(names);
-          }}
-        />
-      )}
-      {merging && (
-        <MergeCollectionSheet
-          c={merging}
-          all={list.data ?? []}
-          onCancel={() => setMerging(null)}
-          onDone={(into) => {
-            setMerging(null);
-            onPick({ kind: "collection", name: into.name }, false);
-          }}
-        />
-      )}
-      {creating && (
-        <NewCollectionSheet
-          parent={creating.parent}
-          onCancel={() => setCreating(null)}
-          onCreated={(child) => {
-            setCreating(null);
-            toast({ kind: "info", text: creating.parent ? `Created ${child.name} inside ${creating.parent.name}` : `Created ${child.name}` });
-            onPick({ kind: "collection", name: child.name }, false);
-          }}
-        />
+      {/* the sheets live outside the tree: a narrow window folds the tree away, not them */}
+      {createPortal(
+        <>
+          {deleting && (
+            <DeleteCollectionSheet
+              c={deleting}
+              onCancel={() => setDeleting(null)}
+              onDone={(_, names) => {
+                setDeleting(null);
+                onDeleted?.(names);
+              }}
+            />
+          )}
+          {merging && (
+            <MergeCollectionSheet
+              c={merging}
+              all={list.data ?? []}
+              onCancel={() => setMerging(null)}
+              onDone={(into) => {
+                setMerging(null);
+                onPick({ kind: "collection", name: into.name }, false);
+              }}
+            />
+          )}
+          {creating && (
+            <NewCollectionSheet
+              parent={creating.parent}
+              onCancel={() => setCreating(null)}
+              onCreated={(child) => {
+                setCreating(null);
+                toast({ kind: "info", text: creating.parent ? `Created ${child.name} inside ${creating.parent.name}` : `Created ${child.name}` });
+                onPick({ kind: "collection", name: child.name }, false);
+              }}
+            />
+          )}
+        </>,
+        document.body,
       )}
     </nav>
   );

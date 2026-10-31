@@ -154,10 +154,10 @@ describe("CollectionTree", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(
-    <MemoryRouter>
-      <CollectionTree active={NONE} onPick={vi.fn()} />
-    </MemoryRouter>,
-  );
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} />
+      </MemoryRouter>,
+    );
     await screen.findByText("Legal");
     expect(screen.queryByText("Old")).toBeNull();
     const toggle = screen.getByRole("button", { name: "Show closed" });
@@ -189,10 +189,10 @@ describe("CollectionTree", () => {
       "GET /api/collections": (call) => ({ body: call.url.includes("state=all") ? [coll(1, "Legal"), { ...coll(5, "Old"), state: "closed" }] : [coll(1, "Legal")] }),
     });
     renderWithProviders(
-    <MemoryRouter>
-      <CollectionTree active={NONE} onPick={vi.fn()} startClosed />
-    </MemoryRouter>,
-  );
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} startClosed />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText("Old")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show closed" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -204,12 +204,14 @@ describe("CollectionTree's New collection", () => {
   it("startNew opens the New collection sheet at once (the sidebar's +)", async () => {
     mockFetch({ "GET /api/collections": { body: [] } });
     renderWithProviders(
-    <MemoryRouter>
-      <CollectionTree active={NONE} onPick={vi.fn()} startNew />
-    </MemoryRouter>,
-  );
+      <MemoryRouter>
+        <CollectionTree active={NONE} onPick={vi.fn()} startNew />
+      </MemoryRouter>,
+    );
     const dialog = await screen.findByRole("dialog", { name: "New collection" });
     expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("");
+    // outside the tree, so it stays when a narrow window folds the tree away
+    expect(dialog.closest("nav")).toBeNull();
   });
 
   it("creates it from the sheet and picks it", async () => {

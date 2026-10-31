@@ -95,6 +95,7 @@ describe("TagTree", () => {
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "New tag" }));
     expect(await screen.findByRole("dialog", { name: "New tag" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "New tag" }).closest("nav")).toBeNull(); // stays when the tree folds away
   });
 
   it("New group opens its sheet", async () => {
