@@ -78,8 +78,10 @@ class Item:
 @dataclass
 class ItemEvent:
     """One line of an item's history: ``kind`` is created | edited | done | reopened |
-    file_added | file_removed | moved | merged_in; ``data`` holds what changed (stored JSON
-    forms)."""
+    file_added | file_removed | moved | merged_in | renewed; ``data`` holds what changed
+    (stored JSON forms). A ``renewed`` event (``RenewalService``) keeps the old and new
+    date and first file, the old file's name and path and the marks that passed on; its
+    Undo adds another ``renewed`` event, ``{undo: true, batch_id}``."""
 
     id: int
     at: float
@@ -830,6 +832,43 @@ class TrayService:
         order.insert(max(0, min(position, len(order))), drive_id)
         conn.execute(delete(item_files).where(item_files.c.item_id == item_id))
         conn.execute(insert(item_files), [{"item_id": item_id, "drive_id": d} for d in order])
+
+    @classmethod
+    def replace_first_file(cls, conn: Connection, item_id: int, old: str, new: str) -> None:
+        """Inside the caller's transaction: ``new`` becomes the item's first file (moved
+        there if it is on the item already) and ``old`` comes off the item; the other
+        files keep their order. No event: the caller writes its own."""
+        exists = conn.execute(
+            select(item_files.c.item_id).where(
+                item_files.c.item_id == item_id, item_files.c.drive_id == new
+            )
+        ).first()
+        if not exists:
+            conn.execute(insert(item_files).values(item_id=item_id, drive_id=new))
+        conn.execute(
+            delete(item_files).where(item_files.c.item_id == item_id, item_files.c.drive_id == old)
+        )
+        cls._place_file(conn, item_id, new, 0)
+
+    def set_date_field(self, conn: Connection, item_id: int, value: date | None) -> None:
+        """Inside the caller's transaction: set the item's ``date_field`` to ``value``
+        (None clears it) and its cached date; the other fields stay as stored. No event,
+        no hook: the caller writes its own and runs ``_date_changed`` after the commit."""
+        row = self._row(conn, item_id)
+        tray = self._find_tray(row.tray_id)
+        if tray is None or tray.date_field is None:
+            raise InvalidRequest("The item's tray has no date")
+        values, invalid = _load(tray.fields, row.fields)
+        invalid.discard(tray.date_field)
+        if value is None:
+            values.pop(tray.date_field, None)
+        else:
+            values[tray.date_field] = value
+        conn.execute(
+            update(items)
+            .where(items.c.id == item_id)
+            .values(fields=_dump(tray.fields, values, invalid), date=value)
+        )
 
     def remove_file(self, item_id: int, drive_id: str) -> Item:
         with write_tx(self.engine) as conn:

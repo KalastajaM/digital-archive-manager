@@ -72,6 +72,7 @@ from dam.snapshots import BEFORE_DELETE, BEFORE_GROUPS, BEFORE_MERGE, create_sna
 from dam.tags import TagAdmin
 from dam.trays import defaults as tray_defaults
 from dam.trays.model import TrayDef, load_trays
+from dam.trays.renewal import RenewalService
 from dam.trays.service import TrayService
 
 log = logging.getLogger(__name__)
@@ -209,6 +210,7 @@ class ServiceParts:
     """What the API and the commands use: one service per screen or task."""
 
     trays: TrayService
+    renewals: RenewalService
     scan_fields: ScanFieldService
     rule_record: RuleRecord
     tag_admin: TagAdmin
@@ -324,8 +326,10 @@ def build_services(
         important_lock=cols.collections.important_lock,
         ongoing=cols.ongoing,
     )
+    # Renewed… on a Renew item: its date, its first file and the marks that follow it
+    renewals = RenewalService(trays, cols.marks)
     activity = ActivityService(
-        executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing
+        executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing, renewals
     )
     today = TodayService(
         trays,
@@ -347,6 +351,7 @@ def build_services(
         provider = FakeProvider(demo_reply, demo=True)
     return ServiceParts(
         trays=trays,
+        renewals=renewals,
         scan_fields=scan_fields,
         rule_record=rule_record,
         tag_admin=TagAdmin(engine),
@@ -409,6 +414,7 @@ class App:
     _packs: packs.PackProfile = field(init=False, repr=False)  # the packs this archive reads with
     _packs_before: packs.PackProfile = field(init=False, repr=False)
     trays: TrayService = field(init=False)
+    renewals: RenewalService = field(init=False)
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)
     tag_admin: TagAdmin = field(init=False)
