@@ -62,12 +62,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr tesseract-ocr-fin
+      # The tests make and delete tens of thousands of files; Defender scanning each one
+      # slows Windows down
+      - name: Leave the workspace and temp folders out of Defender's scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, $env:TEMP
       - run: uv sync --locked
       - run: uv run ruff check .
-      - run: uv run pytest -q -W error
+      - run: uv run pytest -q -W error -n auto
 
   frontend:
-    name: frontend
+    name: frontend (lint, build)
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
@@ -83,8 +89,30 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm test -- --run
       - run: npm run build
+
+  # The tests in three parts at once (vitest --shard splits them by file)
+  frontend-tests:
+    name: frontend tests (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test -- --run --shard=${{ matrix.shard }}/3
 
   # The generated API types must match the backend's OpenAPI schema (npm run gen:api,
   # which uses a throwaway data dir and an empty archive folder).
@@ -118,13 +146,13 @@ jobs:
   # (skipped ones count as passed), so a PR that skips a part never waits for it.
   ci-ok:
     name: CI ok
-    needs: [changes, backend, frontend, schema]
+    needs: [changes, backend, frontend, frontend-tests, schema]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: All checks that ran passed
         run: |
-          echo "changes=${{ needs.changes.result }} backend=${{ needs.backend.result }} frontend=${{ needs.frontend.result }} schema=${{ needs.schema.result }}"
-          for r in "${{ needs.changes.result }}" "${{ needs.backend.result }}" "${{ needs.frontend.result }}" "${{ needs.schema.result }}"; do
+          echo "changes=${{ needs.changes.result }} backend=${{ needs.backend.result }} frontend=${{ needs.frontend.result }} frontend-tests=${{ needs.frontend-tests.result }} schema=${{ needs.schema.result }}"
+          for r in "${{ needs.changes.result }}" "${{ needs.backend.result }}" "${{ needs.frontend.result }}" "${{ needs.frontend-tests.result }}" "${{ needs.schema.result }}"; do
             if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then exit 1; fi
           done
