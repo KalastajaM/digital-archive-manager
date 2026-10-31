@@ -7,7 +7,6 @@
  * out to it), Home and End go to the first and last, Enter picks (with Cmd: adds). */
 import { ChevronRight, FolderPlus, Plus, Tag as TagIcon } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
-import { createPortal } from "react-dom";
 import { type TagInfo as Tag, useAllTags } from "../api/client";
 import type { ScopePick, ScopeState } from "../browseScope";
 import { visible } from "../text";
@@ -213,8 +212,7 @@ export function TagTree({ active, onPick, head }: { active: ScopeState; onPick: 
         )}
       </ul>
       {menu && <ContextMenu x={menu.x} y={menu.y} label={menu.label} entries={menu.entries} onClose={() => setMenu(null)} />}
-      {/* the sheets live outside the tree: a narrow window folds the tree away, not them */}
-      {createPortal(manager.view, document.body)}
+      {manager.view}
     </nav>
   );
 }

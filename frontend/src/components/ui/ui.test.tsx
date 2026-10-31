@@ -277,6 +277,21 @@ describe("Sheet", () => {
     expect(outer).not.toHaveBeenCalled();
   });
 
+  it("a sheet opened from inside another is not inside it on the page, so the outer one's styles never reach it", () => {
+    // the rule sheet lays its own body out in two columns: a folder picker opened from it
+    // took that layout too (its tree squeezed into the left column)
+    renderWithProviders(
+      <Sheet open title="New rule" className="rule-sheet" onClose={() => {}}>
+        <Sheet open title="Choose a folder" onClose={() => {}}>
+          <p>folders</p>
+        </Sheet>
+      </Sheet>,
+    );
+    const inner = screen.getByRole("dialog", { name: "Choose a folder" });
+    expect(inner.closest(".rule-sheet")).toBeNull();
+    expect(inner.parentElement).toBe(document.body);
+  });
+
   it("keeps the title and the footer outside the scrolling body, in that order", () => {
     const long = Array.from({ length: 200 }, (_, i) => <p key={i}>line {i}</p>);
     renderWithProviders(
