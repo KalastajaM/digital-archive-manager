@@ -1901,6 +1901,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/renewals/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Renewal Candidates
+         * @description The open items of trays with ``renew``, for the Inbox's "Renews …?": the folder
+         *     and For of each item's first file, and whether that file is locked as stored (an
+         *     unlock grant does not count). The Inbox matches them to the folder and person it
+         *     files into.
+         */
+        get: operations["renewal_candidates_api_renewals_open_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/renewals/undo": {
         parameters: {
             query?: never;
@@ -5962,6 +5985,12 @@ export interface components {
             /** Follow Up Error */
             follow_up_error: string | null;
             offer?: components["schemas"]["RuleOfferOut"] | null;
+            /** Renew Skipped */
+            renew_skipped?: string | null;
+            /** Renew Batch */
+            renew_batch?: string | null;
+            /** Renew Undo */
+            renew_undo?: ("activity" | "renewal") | null;
         };
         /** FileLinksOut */
         FileLinksOut: {
@@ -6077,6 +6106,10 @@ export interface components {
              * @default false
              */
             important: boolean;
+            /** Renews */
+            renews?: number | null;
+            /** Renew Expires */
+            renew_expires?: string | null;
         };
         /**
          * FileRequestOut
@@ -7954,6 +7987,29 @@ export interface components {
             expires: string;
             /** Drive Id */
             drive_id?: string | null;
+        };
+        /**
+         * RenewCandidateOut
+         * @description An open item of a tray with ``renew``, for the Inbox's "Renews …?" suggestion:
+         *     ``folder`` holds its first file (None: no file, or it is gone), ``person`` is that
+         *     file's For, and ``locked`` says the file is locked as stored (an unlock grant is
+         *     not counted).
+         */
+        RenewCandidateOut: {
+            /** Item Id */
+            item_id: number;
+            /** Title */
+            title: string;
+            /** Expires */
+            expires: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Folder */
+            folder: string | null;
+            /** Person */
+            person: string | null;
+            /** Locked */
+            locked: boolean;
         };
         /** RenewDef */
         RenewDef: {
@@ -19374,6 +19430,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    renewal_candidates_api_renewals_open_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenewCandidateOut"][];
                 };
             };
             /** @description Bad Request */

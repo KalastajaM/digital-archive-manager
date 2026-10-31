@@ -25,6 +25,10 @@ class FileRequestIn(StrictIn):
     # the batch
     star: bool = False
     important: bool = False
+    # renew this open item of a tray with ``renew`` with the filed file, its new date
+    # ``renew_expires`` (the old file moves into Expired in the same batch; no tray step)
+    renews: int | None = None
+    renew_expires: date | None = None
 
 
 class FileBody(StrictIn):

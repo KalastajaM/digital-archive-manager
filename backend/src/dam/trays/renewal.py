@@ -108,6 +108,16 @@ class RenewalService:
         check_destination_area(dest, paths)
         return Op(OpKind.MOVE, rec.path, dest), None
 
+    def old_file(self, item_id: int, new_drive_id: str) -> str:
+        """The item's first file, which ``new_drive_id`` would replace; refused
+        (``InvalidRequest``) as ``record`` would refuse the renewal. Read only (a filing
+        with ``renews`` checks it before anything moves)."""
+        new_drive_id = _check_drive_id(new_drive_id)
+        with self.engine.connect() as conn:
+            before = self._renewable(conn, item_id)
+            self._check_new_file(conn, item_id, before, new_drive_id)
+        return before.files[0]
+
     def plan(self, item_id: int, new_drive_id: str | None, origin: str) -> RenewalPlan:
         """The renewal's file plan, refused (``InvalidRequest``) as ``record`` would
         refuse it. Read only."""

@@ -52,6 +52,9 @@ def file_it(app: AppDep, body: FileBody) -> dict:
         "items": outcome.items,
         "follow_up_error": outcome.follow_up_error,
         "offer": asdict(outcome.offer) if outcome.offer else None,
+        "renew_skipped": outcome.renew_skipped,
+        "renew_batch": outcome.renew_batch,
+        "renew_undo": outcome.renew_undo,
     }
 
 

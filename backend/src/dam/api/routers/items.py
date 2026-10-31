@@ -23,11 +23,13 @@ from dam.api.schemas import (
     QuickOut,
     RenewalUndoBody,
     RenewBody,
+    RenewCandidateOut,
     RenewOut,
     RenewPreviewOut,
 )
 from dam.app import App
 from dam.bills.barcode import item_barcode
+from dam.ops.guards import parent
 
 router = APIRouter(prefix="/api", tags=["items"])
 
@@ -174,6 +176,34 @@ def renew(app: AppDep, item_id: int, body: RenewBody) -> dict:
         "undo": done.undo,
         "skipped": done.skipped,
     }
+
+
+@router.get("/renewals/open", response_model=list[RenewCandidateOut])
+def renewal_candidates(app: AppDep) -> list[dict]:
+    """The open items of trays with ``renew``, for the Inbox's "Renews …?": the folder
+    and For of each item's first file, and whether that file is locked as stored (an
+    unlock grant does not count). The Inbox matches them to the folder and person it
+    files into."""
+    renewable = {t.id for t in app.trays.defs() if t.renew is not None}
+    out = []
+    for item in app.trays.list():
+        if item.tray_id not in renewable:
+            continue
+        first = item.files[0] if item.files else None
+        rec = app.repo.get(first) if first else None
+        live = rec is not None and not rec.missing and rec.parked_at is None
+        out.append(
+            {
+                "item_id": item.id,
+                "title": item.title,
+                "expires": item.date,
+                "kind": item.fields.get("kind"),
+                "folder": parent(rec.path) if live else None,
+                "person": app.assignments.person_of(first) if first else None,
+                "locked": live and app.locks.reason(first, rec.path_nfc) is not None,
+            }
+        )
+    return out
 
 
 @router.post("/renewals/undo", response_model=ItemOut)

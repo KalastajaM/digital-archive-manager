@@ -4,8 +4,11 @@ put them in a tray, in collections and give them a note."""
 import logging
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+from uuid import uuid4
 
 from sqlalchemy import text as sql_text
 
@@ -69,6 +72,9 @@ from dam.services.rule_record import RuleRecord
 from dam.services.scan_fields import ScanFieldService, detected_of, prefill_from
 from dam.trays.service import TrayService
 
+if TYPE_CHECKING:
+    from dam.trays.renewal import RenewalService
+
 log = logging.getLogger(__name__)
 
 EXCERPT_CHARS = 500
@@ -130,6 +136,12 @@ class FileItResult:
     items: list[int] = field(default_factory=list)
     follow_up_error: str | None = None
     offer: RuleOffer | None = None  # "make a rule from this?", see ``file_it``
+    # requests with ``renews``: why an old file was not moved into Expired (None: it
+    # was, or no renewal), the batch id the renewals were recorded under, and which Undo
+    # reverses them: Activity's, or ``POST /api/renewals/undo`` (the batch moved nothing)
+    renew_skipped: str | None = None
+    renew_batch: str | None = None
+    renew_undo: Literal["activity", "renewal"] | None = None
 
 
 @dataclass
@@ -171,7 +183,12 @@ class FileRequest:
     ``collections`` named (created if new), star it or mark it important (a QR
     sticker's tick boxes) and set its ``note``. Star and Important are collection
     memberships made by the batch, so undoing it removes them (a file starred before
-    keeps its star)."""
+    keeps its star).
+
+    ``renews``: the open item (of a tray with ``renew``) this file renews, with its new
+    date ``renew_expires``. The file replaces the item's first file, and the old file
+    moves into its folder's Expired subfolder in the same batch (``RenewalService``).
+    The tray step is skipped then, even with ``tray`` set."""
 
     drive_id: str
     name: str
@@ -183,6 +200,8 @@ class FileRequest:
     note: str = ""
     star: bool = False
     important: bool = False
+    renews: int | None = None
+    renew_expires: date | None = None
 
 
 @dataclass
@@ -195,6 +214,19 @@ class _FollowUp:
     note: str
     star: bool = False
     important: bool = False
+    # the item renewed, its new date and its first file now (the old file)
+    renews: int | None = None
+    renew_expires: date | None = None
+    renew_old: str | None = None
+
+
+@dataclass
+class _RenewMove:
+    """A renewal's move of the old file into Expired: ``op`` (None: ``skipped``, why)."""
+
+    old: str
+    op: Op | None
+    skipped: str | None
 
 
 class InboxService:
@@ -255,6 +287,8 @@ class InboxService:
         self.pictures = pictures
         # cuts and keeps the crops of picture areas
         self._area_pictures = area_pictures
+        # Renewed… from a filing (``FileRequest.renews``), set once the app built it
+        self.renewals: RenewalService | None = None
         # "similar files" folders, kept until the index changes
         self._similar = SimilarFolders(
             repo.engine,
@@ -349,12 +383,13 @@ class InboxService:
     def preview(self, reqs: list[FileRequest], origin: str = "ui") -> list[ResolvedOp]:
         """The plan ``file_it`` would apply. The follow-ups are validated the same way
         first, so a request that ``file_it`` would refuse (``InvalidRequest``: tray,
-        tray field, collection name or note) is refused here too."""
+        tray field, collection name, note or renewal) is refused here too. A renewal's
+        move of the old file into Expired follows the filed file's own op; a locked old
+        file without an unlock is the planner's ``GuardError``."""
         pairs = self._ops(reqs)
-        for req, _ in pairs:
-            self._follow_up(req)
-        resolved = self.executor.preview(self._plan(pairs, origin))
-        self._check_identity(pairs, resolved)
+        moves = self._renew_moves(self._follow_ups(pairs))
+        resolved = self.executor.preview(self._plan(pairs, origin, moves))
+        self._check_identity(pairs, resolved, moves)
         return resolved
 
     def file_it(
@@ -390,24 +425,31 @@ class InboxService:
         overwrites: if the target already has one, it is not added and that is
         reported in ``follow_up_error``.
 
+        A request with ``renews`` renews that item once its file is filed and the old
+        file's move into Expired ran (``_renew``), under the filing's batch id (one
+        Undo, from Activity). A move skipped for a reason (``move_op``) still renews
+        (``renew_skipped``); a batch with no file op at all gets a batch id of its own
+        for the renewal's Undo (``renew_undo``). The tray step is skipped for that file.
+
         ``via`` is how the filing was made (``"form"``, ``"batch"`` or ``"codes"``, not
         to be confused with the journal ``origin``). Form and batch filings record
         whether each rule-suggested value was kept; only a form filing of one file can
         come back with an ``offer`` to make or update a rule (``dam.rules.offer``).
         """
         pairs = self._ops(reqs)
-        follow_ups = [self._follow_up(req) for req, _ in pairs]
+        follow_ups = self._follow_ups(pairs)
+        moves = self._renew_moves(follow_ups)
         suggested = {} if dry_run else self._suggestions_before(reqs, via)
-        plan = self._plan(pairs, origin)
+        plan = self._plan(pairs, origin, moves)
         result = self.executor.apply(
-            plan, dry_run=dry_run, check=lambda ops: self._check_identity(pairs, ops)
+            plan, dry_run=dry_run, check=lambda ops: self._check_identity(pairs, ops, moves)
         )
         outcome = FileItResult(result)
         if dry_run:
             return outcome
         batch_id = result.batch_id if result.done else None
         done = {fold_parts(r.src) for r in result.done if r.kind in (OpKind.RENAME, OpKind.MOVE)}
-        for (req, op), follow in zip(pairs, follow_ups, strict=True):
+        for (req, op), follow, move in zip(pairs, follow_ups, moves, strict=True):
             if not (op is None or fold_parts(op.src) in done):
                 continue
             tags = normalise_tags(req.tags)
@@ -420,6 +462,10 @@ class InboxService:
                     )
                     outcome.untagged.append(req.drive_id)
                     outcome.tag_error = outcome.tag_error or f"{type(e).__name__}: {e}"
+            if move is not None:
+                # the old file's move ran too (or none was planned): only then renew
+                moved = move.op is None or fold_parts(move.op.src) in done
+                self._renew(req.drive_id, follow, move, moved, batch_id, outcome)
             self._run_follow_up(req.drive_id, follow, batch_id, outcome)
             if req.drive_id in suggested:
                 self._learn(req, suggested[req.drive_id], batch_id, via, len(reqs), outcome)
@@ -675,12 +721,41 @@ class InboxService:
 
         return count, lambda: number("", {})
 
+    def _follow_ups(self, pairs: list[tuple[FileRequest, Op | None]]) -> list[_FollowUp]:
+        """``_follow_up`` of each request; one item renewed twice is refused."""
+        out = [self._follow_up(req) for req, _ in pairs]
+        renewed = [f.renews for f in out if f.renews is not None]
+        if len(renewed) != len(set(renewed)):
+            raise InvalidRequest("One item cannot be renewed twice in one filing")
+        return out
+
+    def _renewal(self, req: FileRequest) -> str | None:
+        """Validate a request's ``renews``: the item is open, of a tray with ``renew``,
+        the new date is given and the file can replace the item's first file
+        (``RenewalService.old_file``). Returns that first file (None: no renewal)."""
+        if req.renews is None:
+            if req.renew_expires is not None:
+                raise InvalidRequest("a new expiry given without an item to renew")
+            return None
+        if self.renewals is None:
+            raise InvalidRequest("Renewing is not available here")
+        if isinstance(req.renews, bool) or not isinstance(req.renews, int):
+            raise InvalidRequest("renews must be an item id")
+        if req.renew_expires is None:
+            raise InvalidRequest("Renewing needs the new expiry date")
+        if not isinstance(req.renew_expires, date):
+            raise InvalidRequest("The new expiry is a date")
+        return self.renewals.old_file(req.renews, req.drive_id)
+
     def _follow_up(self, req: FileRequest) -> _FollowUp:
-        """Validate a request's tray/collections/note (no DB writes)."""
+        """Validate a request's tray/collections/note/renewal (no DB writes). With
+        ``renews`` the tray is left out (not validated, no tray step)."""
         if not isinstance(req.tray_fields, dict):
             raise InvalidRequest("tray fields must be a mapping")
+        renew_old = self._renewal(req)
+        tray = req.tray if req.renews is None else None
         fields: dict = {}
-        if req.tray is not None:
+        if tray is not None:
             fields = self.trays.filing_fields(
                 req.tray, req.tray_fields, self.prefill_for(req.drive_id)
             )
@@ -688,7 +763,7 @@ class InboxService:
             if req.tray in self.trays.open_trays([req.drive_id]).get(req.drive_id, []):
                 name = next((t.name for t in self.trays.defs() if t.id == req.tray), req.tray)
                 raise InvalidRequest(f"already in {name}")
-        elif req.tray_fields:
+        elif req.tray is None and req.tray_fields:
             raise InvalidRequest("tray fields given without a tray")
         if isinstance(req.collections, str) or not isinstance(req.collections, list | tuple):
             raise InvalidRequest("collections must be a list of names")
@@ -700,7 +775,15 @@ class InboxService:
             if not isinstance(getattr(req, flag), bool):
                 raise InvalidRequest(f"{flag} must be true or false")
         return _FollowUp(
-            req.tray, fields, list(names.values()), check_note(req.note), req.star, req.important
+            tray,
+            fields,
+            list(names.values()),
+            check_note(req.note),
+            req.star,
+            req.important,
+            req.renews,
+            req.renew_expires,
+            renew_old,
         )
 
     def _run_follow_up(
@@ -760,6 +843,48 @@ class InboxService:
             outcome.follow_up_error = outcome.follow_up_error or (
                 f"note not added: {name} already has a note"
             )
+
+    def _renew_moves(self, follow_ups: list[_FollowUp]) -> list[_RenewMove | None]:
+        """Per request, the move of the renewed item's old file (None: no renewal)."""
+        out: list[_RenewMove | None] = []
+        for follow in follow_ups:
+            if follow.renew_old is None or self.renewals is None:
+                out.append(None)
+                continue
+            op, skipped = self.renewals.move_op(follow.renew_old)
+            out.append(_RenewMove(follow.renew_old, op, skipped))
+        return out
+
+    def _renew(
+        self,
+        drive_id: str,
+        follow: _FollowUp,
+        move: _RenewMove,
+        moved: bool,
+        batch_id: str | None,
+        outcome: FileItResult,
+    ) -> None:
+        """Record the renewal of a filed file (``RenewalService.record``), under the
+        filing's batch, or a batch id of its own when the filing journaled nothing.
+        Not when the old file's planned move did not run (the batch stopped)."""
+        assert self.renewals is not None and follow.renews is not None
+        if not moved:
+            outcome.follow_up_error = outcome.follow_up_error or (
+                "not renewed: the old file was not moved into Expired"
+            )
+            return
+        if batch_id is None:  # nothing journaled: the renewal's own Undo
+            outcome.renew_batch = outcome.renew_batch or uuid4().hex
+            outcome.renew_undo = "renewal"
+        else:
+            outcome.renew_batch, outcome.renew_undo = batch_id, "activity"
+        try:
+            self.renewals.record(follow.renews, follow.renew_expires, drive_id, outcome.renew_batch)
+        except Exception as e:
+            log.warning("renewing item %s with %s failed", follow.renews, drive_id, exc_info=True)
+            outcome.follow_up_error = outcome.follow_up_error or f"{type(e).__name__}: {e}"
+            return
+        outcome.renew_skipped = outcome.renew_skipped or move.skipped
 
     # -- helpers ------------------------------------------------------------
 
@@ -882,15 +1007,29 @@ class InboxService:
         return out
 
     def _check_identity(
-        self, pairs: list[tuple[FileRequest, Op | None]], resolved: list[ResolvedOp]
+        self,
+        pairs: list[tuple[FileRequest, Op | None]],
+        resolved: list[ResolvedOp],
+        moves: Sequence[_RenewMove | None] = (),
     ) -> None:
-        """Each RENAME/MOVE must be the requested file, a regular file on disk
-        (``check_disk_identity``): catches an index that is stale."""
-        ids = [req.drive_id for req, op in pairs if op is not None]
+        """Each RENAME/MOVE must be the requested file (or a renewed item's old file), a
+        regular file on disk (``check_disk_identity``): catches an index that is stale."""
+        ids: list[str] = []
+        for (req, op), move in zip(pairs, moves or [None] * len(pairs), strict=True):
+            if op is not None:
+                ids.append(req.drive_id)
+            if move is not None and move.op is not None:
+                ids.append(move.old)
         check_disk_identity(self.paths, self.repo, ids, resolved)
 
     @staticmethod
-    def _plan(pairs: list[tuple[FileRequest, Op | None]], origin: str) -> Plan:
+    def _plan(
+        pairs: list[tuple[FileRequest, Op | None]],
+        origin: str,
+        moves: Sequence[_RenewMove | None] = (),
+    ) -> Plan:
+        """The filing ops in request order, each renewal's move of its old file into
+        Expired right after the filed file's own op."""
         acting = [req for req, op in pairs if op is not None]
         label = None
         if len(acting) == 1:
@@ -899,6 +1038,10 @@ class InboxService:
             folders = {req.folder for req in acting}
             where = f" into {next(iter(folders))}" if len(folders) == 1 else ""
             label = f"Filed {len(acting)} files{where}"
-        return Plan(
-            [op for _, op in pairs if op is not None], origin=check_origin(origin), label=label
-        )
+        ops: list[Op] = []
+        for (_, op), move in zip(pairs, moves or [None] * len(pairs), strict=True):
+            if op is not None:
+                ops.append(op)
+            if move is not None and move.op is not None:
+                ops.append(move.op)
+        return Plan(ops, origin=check_origin(origin), label=label)

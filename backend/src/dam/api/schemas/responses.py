@@ -515,6 +515,12 @@ class FileItResultOut(BatchResultOut):
     items: list[int]  # tray items created
     follow_up_error: str | None
     offer: RuleOfferOut | None = None
+    # with ``renews``: why the old file was not moved into Expired, the batch id the
+    # renewals were recorded under, and their Undo ("activity", or "renewal": POST
+    # /api/renewals/undo with ``renew_batch``)
+    renew_skipped: str | None = None
+    renew_batch: str | None = None
+    renew_undo: Literal["activity", "renewal"] | None = None
 
 
 class MoveResultOut(BatchResultOut):

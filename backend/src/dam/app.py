@@ -331,6 +331,7 @@ def build_services(
     renewals = RenewalService(
         trays, cols.marks, repo, executor, lambda: live.settings.expired_folder_name
     )
+    inbox.renewals = renewals  # a filing can renew an item (``FileRequest.renews``)
     activity = ActivityService(
         executor, trays, cols.collections, cols.notes, rule_record, cols.ongoing, renewals
     )
