@@ -1,7 +1,6 @@
 import { QrCode, Upload } from "lucide-react";
 import { type MouseEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useStyle } from "../appearance";
 import {
   archiveKey,
   errorText,
@@ -38,7 +37,7 @@ import { Thumb } from "../components/Thumb";
 import { Toolbar } from "../components/ui/Toolbar";
 import { type UndoTarget, useUndoConfirm } from "../components/UndoConfirm";
 import { type QLFile, useQuickLook } from "../components/useQuickLook";
-import { formatDate, formatMoney, plural, shortDate } from "../format";
+import { plural, shortDate } from "../format";
 import { dragSelection, setDragFiles } from "../dnd";
 import { dialogOpen, isShortcut, isTyping, useKeydown } from "../keyboard";
 import { publishSelection } from "../selection";
@@ -100,21 +99,8 @@ const KEYS: KeyHint[] = [
   [["⌘⌫"], "move to To Delete"],
 ];
 
-/** The New look's shortcut list: the same keys, with Skip. */
+/** The shortcut list: the keys, with Skip. */
 const NEW_KEYS: KeyHint[] = [...KEYS.slice(0, 7), [["s"], "skip to the next file"], ...KEYS.slice(7)];
-
-/** "due 15.10.2026 · 84,20 €" from the scan, red once the due date has passed. */
-function ScanChip({ prefill, today }: { prefill: Record<string, string>; today: string }) {
-  const due = prefill.due_date;
-  const total = prefill.total;
-  if (!due && !total) return null;
-  const parts = [due && `due ${formatDate(due)}`, total && formatMoney(total)].filter(Boolean);
-  return (
-    <Tag tone={due && due < today ? "red" : "blue"} className="entry-chip">
-      {visible(parts.join(" · "))}
-    </Tag>
-  );
-}
 
 /** The code the owner assigned to the entry in the app, or null. */
 export const assignedOf = (entry: InboxEntry) => entry.suggestion.codes.find((c) => c.via === "assigned")?.code ?? null;
@@ -144,11 +130,9 @@ function CodeBadge({ codes }: { codes: InboxEntry["suggestion"]["codes"] }) {
 export default function Inbox() {
   const inbox = useInbox();
   const split = useSplitWidth(archiveKey("dam.inbox.listwidth"), { min: 220, max: 520, initial: 280, unit: "px" });
-  // The New look has a second divider, between the document and the filing panel (the
-  // panel's width, remembered like the list's); and below ~1000px the list folds behind
-  // an "Inbox N" button and opens over the card (``queueOpen``).
-  const [look] = useStyle();
-  const isNew = look === "new";
+  // A second divider sits between the document and the filing panel (the panel's width,
+  // remembered like the list's); and below ~1000px the list folds behind an "Inbox N"
+  // button and opens over the card (``queueOpen``).
   const panel = useSplitWidth(archiveKey("dam.inbox.panelwidth"), { min: 320, max: 640, initial: 360, unit: "px", edge: "end" });
   const [queueOpen, setQueueOpen] = useState(false);
   const queueButton = useRef<HTMLButtonElement>(null);
@@ -175,11 +159,10 @@ export default function Inbox() {
     setLastApplied((last) => (last?.batchId === batchId ? null : last)),
   );
 
-  // The New look's queue can show All, Bills (the scan found a due date or an amount) or New
-  // (no rule suggests anything yet); Classic always shows all of them.
+  // The queue can show All, Bills (the scan found a due date or an amount) or New (no rule
+  // suggests anything yet).
   const allEntries: InboxEntry[] = useMemo(() => inbox.data ?? [], [inbox.data]);
-  const [filterChoice, setFilter] = useState<Filter>("all");
-  const filter: Filter = isNew ? filterChoice : "all";
+  const [filter, setFilter] = useState<Filter>("all");
   const entries: InboxEntry[] = useMemo(
     () => (filter === "all" ? allEntries : allEntries.filter((e) => matches(e, filter))),
     [allEntries, filter],
@@ -475,7 +458,7 @@ export default function Inbox() {
       trashTargets();
       return;
     }
-    if (isShortcut(e) && e.key === "?" && isNew) {
+    if (isShortcut(e) && e.key === "?") {
       e.preventDefault();
       setShortcuts((open) => !open);
       return;
@@ -544,7 +527,7 @@ export default function Inbox() {
   }
 
   const multi = checked.size > 0;
-  const queueLead = isNew ? (
+  const queueLead = (
     <button
       ref={queueButton}
       type="button"
@@ -556,7 +539,7 @@ export default function Inbox() {
     >
       Inbox <span className="mono">{allEntries.length}</span>
     </button>
-  ) : undefined;
+  );
   return (
     <div className="inbox" ref={split.hostRef} style={split.hostStyle} data-queue={queueOpen ? "open" : undefined}>
       <nav
@@ -573,7 +556,7 @@ export default function Inbox() {
       >
         <Toolbar
           title="Inbox"
-          subtitle={isNew ? `${allEntries.length} to file` : plural(entries.length, "file")}
+          subtitle={`${allEntries.length} to file`}
           actions={
             <>
               {marked > 0 && (
@@ -617,7 +600,7 @@ export default function Inbox() {
             </>
           }
         />
-        {isNew && allEntries.length > 0 && (
+        {allEntries.length > 0 && (
           <div className="queue-filter-wrap">
           <div className="queue-filter" role="group" aria-label="Show">
             {(
@@ -667,10 +650,8 @@ export default function Inbox() {
                 .filter(Boolean)
                 .join(" ");
               const date = e.record.mtime ? shortDate(e.record.mtime) : "";
-              // the file's own name first: a suggested name is only that until it is filed
-              const suggested = e.suggestion.name !== name ? e.suggestion.name : null;
-              const pill = isNew ? pillOf(e, today) : null;
-              const title = isNew ? titleOf(e) : name;
+              const pill = pillOf(e, today);
+              const title = titleOf(e);
               return (
                 <li
                   key={id}
@@ -699,31 +680,18 @@ export default function Inbox() {
                   >
                     <Thumb record={e.record} />
                     <span className="entry-text">
-                      <span className="entry-name" title={isNew ? visible(title) : undefined}>
+                      <span className="entry-name" title={visible(title)}>
                         {visible(title)}
                         <MarkIcons marks={e.record.marks} driveId={id} path={e.record.path} />
                       </span>
-                      {isNew ? (
-                        // the board's row: the title, then the file's own name and date,
-                        // then one status pill (what the scan or a rule found)
-                        <>
-                          <span className="entry-meta" title={visible(name)}>
-                            {title !== name && <span className="entry-file">{visible(name)}</span>}
-                            {title !== name && date && " · "}
-                            {date}
-                          </span>
-                          {pill && <span className={`entry-pill pill-${pill.tone}`}>{visible(pill.text)}</span>}
-                        </>
-                      ) : (
-                        <>
-                          <span className="entry-meta">
-                            {date}
-                            {date && suggested && " · "}
-                            {suggested && <>Suggested: {visible(suggested)}</>}
-                          </span>
-                          <ScanChip prefill={e.prefill} today={today} />
-                        </>
-                      )}
+                      {/* the board's row: the title, then the file's own name and date, then one
+                          status pill (what the scan or a rule found) */}
+                      <span className="entry-meta" title={visible(name)}>
+                        {title !== name && <span className="entry-file">{visible(name)}</span>}
+                        {title !== name && date && " · "}
+                        {date}
+                      </span>
+                      {pill && <span className={`entry-pill pill-${pill.tone}`}>{visible(pill.text)}</span>}
                       <CodeBadge codes={e.suggestion.codes} />
                     </span>
                   </button>
@@ -732,39 +700,35 @@ export default function Inbox() {
             })}
           </ul>
         )}
-        {isNew ? (
-          <footer className="queue-foot">
-            <span className="queue-checked">
-              {batch.length > 0 ? (
-                <>
-                  {batch.length} checked ·{" "}
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => document.querySelector<HTMLElement>(".inbox-card button.primary")?.focus()}
-                  >
-                    File {batch.length} checked
-                  </button>
-                </>
-              ) : (
-                "None checked"
-              )}
-            </span>
-            <button
-              ref={setShortcutsAnchor}
-              type="button"
-              className="link-button queue-shortcuts"
-              aria-expanded={shortcuts}
-              onClick={() => setShortcuts((open) => !open)}
-            >
-              <kbd>?</kbd> Shortcuts
-            </button>
-          </footer>
-        ) : (
-          <KeyHints hints={KEYS} />
-        )}
+        <footer className="queue-foot">
+          <span className="queue-checked">
+            {batch.length > 0 ? (
+              <>
+                {batch.length} checked ·{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => document.querySelector<HTMLElement>(".inbox-card button.primary")?.focus()}
+                >
+                  File {batch.length} checked
+                </button>
+              </>
+            ) : (
+              "None checked"
+            )}
+          </span>
+          <button
+            ref={setShortcutsAnchor}
+            type="button"
+            className="link-button queue-shortcuts"
+            aria-expanded={shortcuts}
+            onClick={() => setShortcuts((open) => !open)}
+          >
+            <kbd>?</kbd> Shortcuts
+          </button>
+        </footer>
       </nav>
-      {isNew && shortcuts && (
+      {shortcuts && (
         <Popover anchor={shortcutsAnchor} label="Keyboard shortcuts" onClose={() => setShortcuts(false)}>
           <div tabIndex={-1} ref={(el) => el?.focus({ preventScroll: true })} className="shortcut-body">
             <KeyHints hints={NEW_KEYS} className="shortcut-list" />
@@ -772,12 +736,12 @@ export default function Inbox() {
         </Popover>
       )}
       <Splitter split={split} label="Resize the list" />
-      {isNew && queueOpen && <div className="queue-scrim" aria-hidden="true" onClick={() => setQueueOpen(false)} />}
+      {queueOpen && <div className="queue-scrim" aria-hidden="true" onClick={() => setQueueOpen(false)} />}
       <section
         className="inbox-card"
         aria-label="Review"
-        ref={isNew ? panel.hostRef : undefined}
-        style={isNew ? panel.hostStyle : undefined}
+        ref={panel.hostRef}
+        style={panel.hostStyle}
       >
         {markedOpen ? (
           <MarkedBatch
@@ -810,10 +774,10 @@ export default function Inbox() {
             trash={{ run: trashTargets, busy: trash.busy }}
             lead={queueLead}
             onSkip={skip}
-            onQuickLook={isNew ? quickLook.open : undefined}
+            onQuickLook={quickLook.open}
           />
         ) : null}
-        {isNew && !markedOpen && (batch.length > 0 || current) && (
+        {!markedOpen && (batch.length > 0 || current) && (
           <Splitter split={panel} label="Resize the filing panel" />
         )}
       </section>

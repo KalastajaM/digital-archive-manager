@@ -1,5 +1,4 @@
 import { type InputHTMLAttributes, useState } from "react";
-import { useStyle } from "../appearance";
 import { chooseFolder, errorText } from "../api/client";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
@@ -12,7 +11,6 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onC
  * path). Typing keeps working; when no dialog can be shown a plain message says so. The
  * dialog never creates or changes anything. */
 export function FolderPathInput({ value, onChange, disabled, ...input }: Props) {
-  const [look] = useStyle();
   const [choosing, setChoosing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -30,10 +28,6 @@ export function FolderPathInput({ value, onChange, disabled, ...input }: Props) 
     }
   };
 
-  // The Choose… button belongs to the New look; Classic keeps the plain field.
-  if (look !== "new") {
-    return <input {...input} type="text" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />;
-  }
   return (
     <>
       <div className="path-row">

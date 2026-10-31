@@ -161,7 +161,6 @@ with sync_playwright() as p:
                 color_scheme=scheme,
                 timezone_id=TZ,
             )
-            ctx.add_init_script("localStorage.setItem('dam.style', 'new')")  # the New look
             page = ctx.new_page()
             page.goto(f"{BASE}/auth?t={TOKEN}")  # signs this context in (a cookie)
             page.goto(BASE + url)

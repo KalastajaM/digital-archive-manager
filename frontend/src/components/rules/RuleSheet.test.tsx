@@ -103,12 +103,12 @@ describe("RuleSheet", () => {
     const user = userEvent.setup();
     renderWithProviders(<RuleSheet initial={DRAFT} onClose={vi.fn()} />);
     expect(await screen.findByText(/Checked 500 of 900 documents…/, undefined, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Save|Testing…/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save rule|Testing…/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stop" }));
     expect(await screen.findByText(/Stopped at 520 of 900 documents\./, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
     // what it found so far is the proof: Save is possible, and Test again starts over
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save rule" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Test again" }));
     expect(await screen.findByText(/Checked 500 of 900 documents…/, undefined, { timeout: 5000 })).toBeInTheDocument();
   });
@@ -244,7 +244,7 @@ describe("RuleSheet", () => {
   it("Save with differences asks first, then saves", async () => {
     const { calls, user, onClose } = setup();
     await screen.findByText(/Matches 4/);
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Save rule" }));
     const ask = await screen.findByText("1 document would land somewhere else. Save anyway?");
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
     await user.click(within(ask.closest("dialog") as HTMLElement).getByRole("button", { name: "Save anyway" }));
@@ -256,7 +256,7 @@ describe("RuleSheet", () => {
   it("Save without differences saves at once, sending replaces when updating", async () => {
     const { calls, user } = setup({ ...REPLAY, different: [] }, { replaces: "kotihoito" });
     await screen.findByText(/Matches 4/);
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT")?.url).toBe("/api/rules/kotihoito?replaces=kotihoito");
   });
@@ -301,7 +301,7 @@ describe("RuleSheet", () => {
     const { user } = setup();
     await screen.findByText(/Matches 4/);
     await user.click(screen.getByRole("button", { name: "kotihoito" }));
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save rule" })).toBeDisabled();
     expect(screen.getByText("Tick at least one word")).toBeInTheDocument();
   });
 
@@ -323,7 +323,7 @@ describe("RuleSheet", () => {
     setup();
     const save = screen.getByRole("button", { name: "Testing…" });
     expect(save).toBeDisabled();
-    expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Save rule" })).toBeEnabled();
   });
 
   it("Save is disabled within the debounce after an edit, and while the replay is in flight", async () => {
@@ -343,7 +343,7 @@ describe("RuleSheet", () => {
         return held.promise;
       },
     } as never);
-    await screen.findByRole("button", { name: "Save" });
+    await screen.findByRole("button", { name: "Save rule" });
     await user.click(screen.getByRole("button", { name: "lasku" })); // an edit: the debounce runs
     expect(screen.getByRole("button", { name: "Testing…" })).toBeDisabled();
     await new Promise((r) => setTimeout(r, 600)); // the replay is in flight, held
@@ -351,7 +351,7 @@ describe("RuleSheet", () => {
     expect(screen.getByRole("region", { name: "Test against your filed documents" })).toHaveAttribute("aria-busy", "true"); // the old proof stays
     expect(screen.getByText(/Matches 4/)).toBeInTheDocument();
     held.resolve({ body: { job_id: "job-2", sheet: "s", state: "done", version: 1, looked_at: 4, total: 4, waiting: 0, elapsed_s: 0, error: null, result: null } });
-    expect(await screen.findByRole("button", { name: "Save" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Save rule" })).toBeEnabled();
   });
 
   it("after a failed replay Save stays disabled until Try again succeeds", async () => {
@@ -366,11 +366,11 @@ describe("RuleSheet", () => {
         fail ? { status: 500, body: { error: "boom" } } : (routes["POST /api/rules/replay/jobs"] as (c: Call) => object)(call),
     } as never);
     await user.click(await screen.findByRole("button", { name: "Try again" }));
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save rule" })).toBeDisabled();
     fail = false;
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/Matches 4/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save rule" })).toBeEnabled();
   });
   describe("zones and senders", () => {
     const ZONE_RULE = {
@@ -458,11 +458,11 @@ describe("RuleSheet", () => {
       await user.click(within(two).getByRole("button", { name: "vakuutuskirja" }));
       await user.click(within(two).getByRole("button", { name: "policy" }));
       expect(screen.getByText("Tick a word in area 2")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Save rule" })).toBeDisabled();
       await user.click(within(two).getByRole("button", { name: "Remove area 2" }));
       await user.click(within(screen.getByRole("group", { name: "Area" })).getByRole("button", { name: "Remove area" }));
       expect(screen.getByText("A rule needs a word or an area")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Save rule" })).toBeDisabled();
     });
 
     describe("a sample page", () => {
@@ -821,7 +821,7 @@ describe("RuleSheet", () => {
       expect(await within(sheet).findByText(/Add a text box to make this faster and surer/)).toBeInTheDocument();
       await user.click(within(sheet).getByRole("button", { name: "Remove area" }));
       expect(within(sheet).getByText("A rule needs a word or an area")).toBeInTheDocument();
-      expect(within(sheet).getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(within(sheet).getByRole("button", { name: "Save rule" })).toBeDisabled();
     });
 
     it("lists the scores of the matches and of the best non-matches under the proof", async () => {
@@ -875,7 +875,7 @@ describe("How an area's words match", () => {
   it("a drawn area starts on Starts a word, with a tooltip that gives the examples", async () => {
     const { calls } = open();
     const area = await screen.findByRole("group", { name: "Area" });
-    expect(within(area).getByRole("combobox", { name: "How the words match in area" })).toHaveValue("word_start");
+    expect(within(within(area).getByRole("group", { name: "How the words match in area" })).getByRole("button", { name: "Starts a word" })).toHaveAttribute("aria-pressed", "true");
     expect(within(area).getByRole("img", { name: /Kela finds Kela, Kelan and Kelalta.*Henkivakuutus/ })).toBeInTheDocument();
     await waitFor(() => expect(lastRule(calls).when.zones).toEqual([{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"], match: "word_start" }]));
   });
@@ -884,10 +884,10 @@ describe("How an area's words match", () => {
     const { calls, user } = open();
     const area = await screen.findByRole("group", { name: "Area" });
     await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(1));
-    await user.selectOptions(within(area).getByRole("combobox", { name: "How the words match in area" }), "whole_word");
+    await user.click(within(within(area).getByRole("group", { name: "How the words match in area" })).getByRole("button", { name: "Whole word" }));
     await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(2));
     expect(lastRule(calls).when.zones[0].match).toBe("whole_word");
-    await user.selectOptions(within(area).getByRole("combobox", { name: "How the words match in area" }), "anywhere");
+    await user.click(within(within(area).getByRole("group", { name: "How the words match in area" })).getByRole("button", { name: "Anywhere" }));
     await waitFor(() => expect(posts(calls, "/api/rules/replay/jobs")).toHaveLength(3));
     expect(lastRule(calls).when.zones[0]).not.toHaveProperty("match");
   });
@@ -905,7 +905,7 @@ describe("How an area's words match", () => {
     };
     const { calls } = open(rule);
     const area = await screen.findByRole("group", { name: "Area" });
-    expect(within(area).getByRole("combobox", { name: "How the words match in area" })).toHaveValue("anywhere");
+    expect(within(within(area).getByRole("group", { name: "How the words match in area" })).getByRole("button", { name: "Anywhere" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(lastRule(calls).when.zones).toEqual([{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["kela"] }]));
   });
 });
@@ -1140,10 +1140,10 @@ describe("The rule sheet, reviewed", () => {
     const sheet = await screen.findByRole("dialog");
     await within(sheet).findByText(/Matches 4 documents/);
     await user.type(within(sheet).getByRole("combobox", { name: "Add to collection" }), "Leg");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save rule" })).toBeDisabled());
     expect(screen.getByText("Press Enter to add ‘Leg’ or clear it")).toBeInTheDocument();
     await user.type(within(sheet).getByRole("combobox", { name: "Add to collection" }), "{Enter}");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save rule" })).toBeEnabled());
   });
 
   it("an edited rule opens with its collections", async () => {

@@ -1,4 +1,4 @@
-/** A summary that is edited where it stands (New look; a file's and a collection's): the
+/** A summary that is edited where it stands (a file's and a collection's): the
  * text is a button that turns into a field on a click, and the field saves when it loses
  * focus. Esc puts the text back. An empty summary shows a placeholder to click into. The
  * button's name is the text itself, so a screen reader reads the summary.

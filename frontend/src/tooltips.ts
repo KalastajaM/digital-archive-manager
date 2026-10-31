@@ -1,9 +1,8 @@
-/** The New look's tooltips. Classic draws a ``data-tip`` as a CSS box inside the control, which
- * a pane edge or the neighbouring panel can cut off. In New one tip element lives in the top
- * layer (the Popover API, so it also sits above a modal dialog), is placed with fixed
- * coordinates, and is kept inside the window: below the control, above it when there is no
- * room below (or ``data-tip-side="above"``), shifted sideways at the edges. One listener set
- * for the whole app, like ``overflowTitles``; the CSS ``::after`` boxes are hidden in New. */
+/** Tooltips for ``data-tip``. One tip element lives in the top layer (the Popover API, so it
+ * also sits above a modal dialog), is placed with fixed coordinates, and is kept inside the
+ * window: below the control, above it when there is no room below (or
+ * ``data-tip-side="above"``), shifted sideways at the edges. One listener set for the whole
+ * app, like ``overflowTitles``; the CSS ``::after`` boxes are hidden. */
 
 const SHOW_AFTER_MS = 450;
 const GAP = 6;
@@ -30,8 +29,6 @@ export function placeTip(
   top = Math.max(MARGIN, Math.min(top, view.height - tip.height - MARGIN));
   return { left, top };
 }
-
-const isNew = () => document.documentElement.dataset.style === "new";
 
 /** Install the listeners once; returns their removal (tests). */
 export function installTooltips(root: Document = document): () => void {
@@ -65,7 +62,7 @@ export function installTooltips(root: Document = document): () => void {
 
   const show = (target: HTMLElement) => {
     const text = target.getAttribute("data-tip");
-    if (!text || !target.isConnected || !isNew()) return;
+    if (!text || !target.isConnected) return;
     const box = element();
     box.textContent = text;
     box.setAttribute("data-open", "");
@@ -99,14 +96,12 @@ export function installTooltips(root: Document = document): () => void {
   };
 
   const onOver = (e: Event) => {
-    if (!isNew()) return;
     const el = tipOf(e.target);
     if (el === current) return;
     if (el) schedule(el, SHOW_AFTER_MS);
     else hide();
   };
   const onFocus = (e: Event) => {
-    if (!isNew()) return;
     const el = tipOf(e.target);
     if (!el) return;
     let visible = true;
@@ -124,7 +119,6 @@ export function installTooltips(root: Document = document): () => void {
 
   // A drop target that refuses a drag says why at once (hover does not apply during a drag).
   const observer = new MutationObserver((records) => {
-    if (!isNew()) return;
     for (const r of records) {
       const el = r.target as HTMLElement;
       if (el.getAttribute("data-drop") === "refused" && el.hasAttribute("data-tip") && !el.matches(".pane-body, .entries li")) {

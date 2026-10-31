@@ -1,5 +1,5 @@
-/** The one file panel skeleton (the New look): its blocks come in one order, a block left empty
- * is not drawn, and the Classic file view keeps its own order. */
+/** The one file panel skeleton: its blocks come in one order, a block left empty
+ * is not drawn, and the file view keeps its own order. */
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -35,7 +35,7 @@ describe("FilePanelSkeleton", () => {
     expect(blocks(container.firstElementChild as HTMLElement)).toEqual(["header", "actions"]);
   });
 
-  it("the Classic file view keeps its order and ignores the skeleton's extra blocks", () => {
+  it("the file view keeps its order and ignores the skeleton's extra blocks", () => {
     const { container } = render(<FileView {...FILLED} />);
     expect(blocks(container.firstElementChild as HTMLElement)).toEqual([...FILE_VIEW_BLOCKS]);
   });

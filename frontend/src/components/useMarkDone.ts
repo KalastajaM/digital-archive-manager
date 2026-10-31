@@ -1,7 +1,7 @@
 /** Mark an item done from a list: completes at once, sending each done field's default
  * (``paid_on``: today), with a toast that offers Undo. Only a done field that is
  * required and has no default needs the small form (``needsForm``): the caller opens
- * ``DoneForm`` instead. Shared by Today's rows, the New look's bill table and Pay mode. */
+ * ``DoneForm`` instead. Shared by Today's rows, the bill table and Pay mode. */
 import { errorText, type TrayDef, useItemDone, useItemReopen } from "../api/client";
 import { visible } from "../text";
 import { useToast } from "./Toasts";

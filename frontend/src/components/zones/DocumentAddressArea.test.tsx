@@ -1,5 +1,5 @@
-/** The address area of one document in the New look: drawn with Draw a box, moved on the
- * page, removed, and given back to the usual one; Classic shows none of it. */
+/** The address area of one document: drawn with Draw a box, moved on the page, removed,
+ * and given back to the usual one. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -20,11 +20,9 @@ const AREA = "/api/files/d1/address-area";
 
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-function setup(look: "new" | "classic", state: "general" | "document" | "none" = "general") {
-  if (look === "new") document.documentElement.dataset.style = "new";
+function setup(state: "general" | "document" | "none" = "general") {
   // what the server holds: the save changes what the next read gives
   let held = { state, box: state === "document" ? [0.1, 0.1, 0.5, 0.2] : null };
   const calls = mockFetch({
@@ -47,7 +45,7 @@ function setup(look: "new" | "classic", state: "general" | "document" | "none" =
   } as never);
   renderWithProviders(
     <MemoryRouter>
-      <FilePreview file={pdf} bar={look === "new" ? <span>a.pdf</span> : undefined} boxTool={{ suggestion: { name_source: "scan", folder_source: null } }} />
+      <FilePreview file={pdf} bar={<span>a.pdf</span>} boxTool={{ suggestion: { name_source: "scan", folder_source: null } }} />
     </MemoryRouter>,
   );
   return { user: userEvent.setup(), calls };
@@ -63,7 +61,7 @@ async function draw() {
 
 describe("the address area of one document", () => {
   it("removes it, so nobody is looked for on this document", async () => {
-    const { user, calls } = setup("new");
+    const { user, calls } = setup();
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     const group = await screen.findByRole("group", { name: "Address area of this document" });
     expect(within(group).getByText("This document uses the usual address area.")).toBeInTheDocument();
@@ -74,7 +72,7 @@ describe("the address area of one document", () => {
   });
 
   it("gives it back to the usual area", async () => {
-    const { user, calls } = setup("new", "none");
+    const { user, calls } = setup("none");
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     const group = await screen.findByRole("group", { name: "Address area of this document" });
     await user.click(within(group).getByRole("button", { name: "Use the usual address area" }));
@@ -83,13 +81,13 @@ describe("the address area of one document", () => {
   });
 
   it("a document without one says so without Draw a box, and can get the usual one back", async () => {
-    setup("new", "none");
+    setup("none");
     const group = await screen.findByRole("group", { name: "Address area of this document" });
     expect(within(group).getByRole("button", { name: "Use the usual address area" })).toBeInTheDocument();
   });
 
   it("a document with the usual one keeps quiet until the areas are shown or Draw a box is on", async () => {
-    const { user } = setup("new");
+    const { user } = setup();
     await screen.findByRole("button", { name: "Draw a box" });
     expect(screen.queryByRole("group", { name: "Address area of this document" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
@@ -97,7 +95,7 @@ describe("the address area of one document", () => {
   });
 
   it("makes a drawn box this document's own area", async () => {
-    const { user, calls } = setup("new");
+    const { user, calls } = setup();
     await user.click(screen.getByRole("button", { name: "Draw a box" }));
     await draw();
     const panel = await screen.findByRole("region", { name: "The boxes" });
@@ -105,23 +103,12 @@ describe("the address area of one document", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.url === AREA)).toBe(true));
     expect(calls.find((c) => c.method === "PUT" && c.url === AREA)?.body).toEqual({ box: [0.1, 0.1, 0.5, 0.3] });
   });
-
-  it("is not offered in Classic", async () => {
-    const { user } = setup("classic");
-    await user.click(screen.getByRole("button", { name: "Draw a box" }));
-    await draw();
-    const panel = await screen.findByRole("region", { name: "The boxes" });
-    expect(await within(panel).findByRole("button", { name: "Address area for all letters" })).toBeInTheDocument();
-    expect(within(panel).queryByRole("button", { name: "Address area for this document only" })).toBeNull();
-    expect(screen.queryByRole("group", { name: "Address area of this document" })).toBeNull();
-  });
 });
 
 describe("moving the address area on a document", () => {
   const area = { rule_id: "", index: 0, box: [0.06, 0.1, 0.52, 0.3], kind: "address" as const, lines: [], matched: true, wins: false };
 
   function renderChange(document = false) {
-    window.document.documentElement.dataset.style = "new";
     const calls = mockFetch({
       "GET /api/settings/people": { body: PEOPLE },
       "PUT /api/settings/people": { body: PEOPLE },

@@ -1,6 +1,5 @@
-/** The rule sheet in the New look: the match choice is a segmented control, the name has
- * pattern chips, the proof has a one-line summary (shown by CSS in a narrow sheet) with
- * "Show proof". Classic keeps its select and has none of these. */
+/** The rule sheet: the match choice is a segmented control, the name has pattern chips,
+ * the proof has a one-line summary (shown by CSS in a narrow sheet) with "Show proof". */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +12,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
 const REPLAY = {
@@ -44,8 +42,7 @@ const ZONE_DRAFT = {
   people_found: [],
 };
 
-function setup(look: "new" | "classic") {
-  if (look === "new") document.documentElement.dataset.style = "new";
+function setup() {
   const calls: Call[] = mockFetch({
     "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
     "GET /api/trays": { body: { trays: [], errors: [] } },
@@ -57,9 +54,9 @@ function setup(look: "new" | "classic") {
   return { calls, user: userEvent.setup() };
 }
 
-describe("RuleSheet in the New look", () => {
+describe("RuleSheet", () => {
   it("offers Words match as a segmented control that changes the rule", async () => {
-    const { calls, user } = setup("new");
+    const { calls, user } = setup();
     const group = await screen.findByRole("group", { name: "How the words match in area" });
     expect(screen.queryByRole("combobox", { name: "How the words match in area" })).toBeNull();
     expect(within(group).getByRole("button", { name: "Starts a word" })).toHaveAttribute("aria-pressed", "true");
@@ -73,7 +70,7 @@ describe("RuleSheet in the New look", () => {
   });
 
   it("puts a name pattern into the field at the caret when its chip is clicked", async () => {
-    const { user } = setup("new");
+    const { user } = setup();
     const name = (await screen.findByLabelText("Name")) as HTMLInputElement;
     await user.clear(name);
     await user.type(name, "ab");
@@ -85,7 +82,7 @@ describe("RuleSheet in the New look", () => {
   });
 
   it("summarises the proof in one line and opens it with Show proof", async () => {
-    const { user } = setup("new");
+    const { user } = setup();
     const show = await screen.findByRole("button", { name: "Show proof" });
     expect(show).toHaveAttribute("aria-expanded", "false");
     expect(show.closest("dialog")).not.toHaveClass("proof-open");
@@ -97,30 +94,18 @@ describe("RuleSheet in the New look", () => {
   });
 
   it("shows the proof's figure beside the sentence", async () => {
-    setup("new");
+    setup();
     await screen.findByText(/Matches 11 documents you filed before/);
     expect(document.querySelector(".replay-figure")).toHaveTextContent("10 / 11");
   });
 });
 
-describe("RuleSheet header and foot in the New look", () => {
+describe("RuleSheet header and foot", () => {
   it("has a close button, calls its proof The proof and saves with Save rule", async () => {
-    const { user } = setup("new");
+    const { user } = setup();
     const sheet = await screen.findByRole("dialog", { name: "Make a rule" });
     expect(await within(sheet).findByText("The proof")).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "Save rule" })).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Close" }));
-  });
-});
-
-describe("RuleSheet in Classic", () => {
-  it("keeps the select, and has no chips or proof summary", async () => {
-    setup("classic");
-    expect(await screen.findByRole("combobox", { name: "How the words match in area" })).toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Insert into name" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Show proof" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-    expect(screen.queryByText("The proof")).toBeNull();
-    expect(screen.getByRole("button", { name: /^(Save|Testing…)$/ })).toBeInTheDocument();
   });
 });

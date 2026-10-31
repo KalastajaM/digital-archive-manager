@@ -11,19 +11,16 @@ import { CollectionNamesInput } from "../components/CollectionInput";
 import { pendingCollection } from "../components/CollectionPicker";
 import { changeToast } from "../components/collectionText";
 import { useToast } from "../components/Toasts";
-import { TrashButton } from "../components/Trash";
 import { FolderPicker } from "../components/FolderPicker";
 import { PlanPreview } from "../components/PlanPreview";
 import { TagInput } from "../components/TagInput";
 import { TrayPicker } from "../components/TrayPicker";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
 import { Toolbar } from "../components/ui/Toolbar";
-import { ImportantGlyph, MarkIcons, StarGlyph } from "../components/MarkIcons";
-import { IconButton } from "../components/ui/IconButton";
+import { MarkIcons } from "../components/MarkIcons";
 import { TipButton } from "../components/ui/TipButton";
 import { FileActionIcons } from "../components/FileActionIcons";
 import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
-import { useStyle } from "../appearance";
 import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
 import { addTags, FieldChips, type Offer, offersFor, parseTags, tagOffers, UseAll } from "../components/SuggestionChip";
 import { visible } from "../text";
@@ -37,7 +34,7 @@ type Props = {
   onAdded?: (driveIds: string[]) => void;
   /** Trash for the whole batch (the inbox owns the flow). */
   trash?: CardTrash;
-  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  /** The "Inbox N" button (the list is folded in a narrow window). */
   lead?: ReactNode;
 };
 
@@ -91,8 +88,6 @@ function commonFolder(entries: InboxEntry[]): string {
  * the server (``tray_fields: {}``). No note. */
 export default function BatchCard({ entries, filing, onAdded, trash, lead }: Props) {
   const ids = useId();
-  const [look] = useStyle();
-  const isNew = look === "new";
   const [folder, setFolder] = useState(() => commonFolder(entries));
   const [folderEdited, setFolderEdited] = useState(false);
   const [tags, setTags] = useState("");
@@ -203,26 +198,6 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
   }));
   const starAll = allMarked(markable, "star");
   const importantAll = allMarked(markable, "important");
-  // ★ / ! and the bin: toolbar icons in Classic, the file panel's icon rows in New
-  const marksAndTrash = (
-    <>
-      <IconButton
-        icon={<StarGlyph size={16} filled={starAll} />}
-        label={starAll ? "Remove the star" : "Star"}
-        pressed={starAll}
-        disabled={marks.busy}
-        onClick={() => void marks.run("star", markable)}
-      />
-      <IconButton
-        icon={<ImportantGlyph large />}
-        label={importantAll ? "Unmark Important" : "Mark Important"}
-        pressed={importantAll}
-        disabled={marks.busy}
-        onClick={() => void marks.run("important", markable)}
-      />
-      {trash && <TrashButton count={entries.length} disabled={filing.busy || adding.busy || trash.busy} onClick={trash.run} />}
-    </>
-  );
   const fields = (
     <>
       <FilingMessage filing={filing} ids={cardIds} problem={tried && !folderProblem ? otherProblem : null} />
@@ -261,19 +236,6 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
         />
         <FieldChips field="tag" offers={tagChips} disabled={filing.busy || adding.busy} onUse={(o) => setTags(addTags(tags, [o.value]))} />
       </div>
-      {!isNew && (
-      <div className="field from-for-batch" role="group" aria-label="Who">
-        <span className="field-label">Who</span>
-        <div className="actions">
-          <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("sender")}>
-            From…
-          </button>
-          <button type="button" disabled={filing.busy || adding.busy} onClick={() => setAssigning("person")}>
-            For…
-          </button>
-        </div>
-      </div>
-      )}
       <hr />
       <TrayPicker
         trays={trays.list}
@@ -331,7 +293,6 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
         subtitle="each keeps its suggested name"
         actions={
           <>
-            {!isNew && marksAndTrash}
             <TipButton
               className="tip-end"
               tip="Show exactly what will move, before anything changes ↩"
@@ -369,30 +330,26 @@ export default function BatchCard({ entries, filing, onAdded, trash, lead }: Pro
           ))}
         </ul>
         <div className="inspector batch-form">
-          {isNew ? (
-            <FilePanelSkeleton
-              header={
-                <header className="file-meta-head">
-                  <div className="file-meta-title">
-                    <h2>{count} selected</h2>
-                  </div>
-                  <p className="current-path">each keeps its suggested name</p>
-                </header>
-              }
-              actions={
-                <FileActionIcons
-                  sender={{ run: () => setAssigning("sender"), disabled: filing.busy || adding.busy }}
-                  person={{ run: () => setAssigning("person"), disabled: filing.busy || adding.busy }}
-                  star={{ on: starAll, run: () => void marks.run("star", markable), disabled: marks.busy }}
-                  important={{ on: importantAll, run: () => void marks.run("important", markable), disabled: marks.busy }}
-                  trash={trash ? { count: entries.length, run: trash.run, disabled: filing.busy || adding.busy || trash.busy } : undefined}
-                />
-              }
-              top={fields}
-            />
-          ) : (
-            fields
-          )}
+          <FilePanelSkeleton
+            header={
+              <header className="file-meta-head">
+                <div className="file-meta-title">
+                  <h2>{count} selected</h2>
+                </div>
+                <p className="current-path">each keeps its suggested name</p>
+              </header>
+            }
+            actions={
+              <FileActionIcons
+                sender={{ run: () => setAssigning("sender"), disabled: filing.busy || adding.busy }}
+                person={{ run: () => setAssigning("person"), disabled: filing.busy || adding.busy }}
+                star={{ on: starAll, run: () => void marks.run("star", markable), disabled: marks.busy }}
+                important={{ on: importantAll, run: () => void marks.run("important", markable), disabled: marks.busy }}
+                trash={trash ? { count: entries.length, run: trash.run, disabled: filing.busy || adding.busy || trash.busy } : undefined}
+              />
+            }
+            top={fields}
+          />
           {plan && (
             <div className="inbox-plan">
               <PlanPreview

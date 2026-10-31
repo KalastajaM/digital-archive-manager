@@ -1,5 +1,5 @@
-/** The Inbox in the New look: a second divider (the filing panel's width) and, for a narrow
- * window, an "Inbox N" button that opens the folded list. Classic has neither. */
+/** The Inbox: a second divider (the filing panel's width) and, for a narrow window, an
+ * "Inbox N" button that opens the folded list. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -89,8 +89,7 @@ const QUEUE = [
   entry("n1", "letter.pdf"),
 ];
 
-function setup(look: "new" | "classic", list: InboxEntry[] = ENTRIES, more: Record<string, unknown> = {}) {
-  if (look === "new") document.documentElement.dataset.style = "new";
+function setup(list: InboxEntry[] = ENTRIES, more: Record<string, unknown> = {}) {
   mockFetch({
     "GET /api/inbox": { body: list },
     "GET /api/folders": { body: [] },
@@ -109,12 +108,11 @@ function setup(look: "new" | "classic", list: InboxEntry[] = ENTRIES, more: Reco
 beforeEach(() => localStorage.clear());
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-describe("Inbox in the New look", () => {
+describe("Inbox", () => {
   it("has a divider for the filing panel next to the list's, remembered and reset by a double-click", async () => {
-    setup("new");
+    setup();
     await screen.findByLabelText("Name");
     const panel = screen.getByRole("separator", { name: "Resize the filing panel" });
     expect(panel).toHaveAttribute("aria-valuenow", "360");
@@ -128,7 +126,7 @@ describe("Inbox in the New look", () => {
   });
 
   it("folds the list behind an Inbox N button: it opens, takes the focus, and Esc closes it", async () => {
-    const user = setup("new");
+    const user = setup();
     const button = await screen.findByRole("button", { name: "Inbox 2" });
     const list = screen.getByRole("navigation", { name: "Inbox" });
     expect(button).toHaveAttribute("aria-expanded", "false");
@@ -144,7 +142,7 @@ describe("Inbox in the New look", () => {
   });
 
   it("closes the folded list when a file is picked in it", async () => {
-    const user = setup("new");
+    const user = setup();
     const button = await screen.findByRole("button", { name: "Inbox 2" });
     await user.click(button);
     await user.click(screen.getByRole("button", { name: /scan002\.pdf/ }));
@@ -156,19 +154,9 @@ describe("Inbox in the New look", () => {
   });
 });
 
-describe("Inbox in Classic", () => {
-  it("has no filing panel divider and no Inbox N button", async () => {
-    setup("classic");
-    await screen.findByLabelText("Name");
-    expect(screen.queryByRole("separator", { name: "Resize the filing panel" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Inbox \d/ })).toBeNull();
-    expect(screen.getByRole("separator", { name: "Resize the list" })).toBeInTheDocument();
-  });
-});
-
-describe("The queue in the New look", () => {
+describe("The queue", () => {
   it("counts the files to file and filters All, Bills and New", async () => {
-    const user = setup("new", QUEUE);
+    const user = setup(QUEUE);
     await screen.findByLabelText("Name");
     expect(screen.getByText("3 to file")).toBeInTheDocument();
     const filter = screen.getByRole("group", { name: "Show" });
@@ -184,7 +172,7 @@ describe("The queue in the New look", () => {
   });
 
   it("gives a row its title, the file's name and date, and a status pill", async () => {
-    setup("new", QUEUE);
+    setup(QUEUE);
     await screen.findByLabelText("Name");
     const list = screen.getByRole("navigation", { name: "Inbox" });
     const water = within(list).getByRole("button", { name: /Vesilaitos water bill/ });
@@ -198,7 +186,7 @@ describe("The queue in the New look", () => {
   });
 
   it("lists the shortcuts, with Skip, in a popover from the foot", async () => {
-    const user = setup("new");
+    const user = setup();
     await screen.findByLabelText("Name");
     expect(screen.getByText("None checked")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Shortcuts/ }));
@@ -209,7 +197,7 @@ describe("The queue in the New look", () => {
   });
 
   it("says what is checked and offers to file it", async () => {
-    const user = setup("new", QUEUE);
+    const user = setup(QUEUE);
     await screen.findByLabelText("Name");
     await user.click(screen.getByRole("checkbox", { name: "Select water.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select power.pdf" }));
@@ -219,9 +207,9 @@ describe("The queue in the New look", () => {
   });
 });
 
-describe("The filing panel in the New look", () => {
+describe("The filing panel", () => {
   it("names the rule behind the suggestion and opens it with Edit rule", async () => {
-    const user = setup("new", QUEUE, {
+    const user = setup(QUEUE, {
       "GET /api/rules": { body: { rules: [RULE], errors: [], state: { offer: true, declined: 0 }, unused_pictures: [], default_min_score: 0.85 } },
       "GET /api/status": { body: { special_folders: { inbox: "##. Organize" } } },
       "GET /api/tags": { body: [] },
@@ -239,7 +227,7 @@ describe("The filing panel in the New look", () => {
   });
 
   it("is the one file panel: the file's header, the icon rows, then the form, with Relatives after it", async () => {
-    setup("new");
+    setup();
     const panel = await screen.findByRole("complementary", { name: "File this document" });
     await within(panel).findByLabelText("Name");
     const blocks = [...panel.querySelectorAll(".file-skeleton > [data-block]")].map((b) => (b as HTMLElement).dataset.block);
@@ -263,7 +251,7 @@ describe("The filing panel in the New look", () => {
   });
 
   it("several selected: the same skeleton with From, For, the marks and the bin in the icon rows, no Who field", async () => {
-    const user = setup("new");
+    const user = setup();
     await screen.findByLabelText("Name");
     await user.click(screen.getByRole("checkbox", { name: "Select scan001.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select scan002.pdf" }));
@@ -286,7 +274,7 @@ describe("The filing panel in the New look", () => {
   });
 
   it("has no Edit rule when no rule suggested anything", async () => {
-    const user = setup("new", QUEUE);
+    const user = setup(QUEUE);
     await screen.findByLabelText("Name");
     await user.click(screen.getByRole("button", { name: /letter\.pdf/ }));
     const panel = await screen.findByRole("complementary", { name: "File this document" });
@@ -295,7 +283,7 @@ describe("The filing panel in the New look", () => {
   });
 
   it("files from its foot: Skip, To Delete and File it, with what filing does in a line", async () => {
-    setup("new");
+    setup();
     const panel = await screen.findByRole("complementary", { name: "File this document" });
     expect(within(panel).getByRole("button", { name: "Skip" })).toBeEnabled();
     expect(within(panel).getByRole("button", { name: "File it" })).toBeInTheDocument();
@@ -307,7 +295,7 @@ describe("The filing panel in the New look", () => {
 
 describe("Skip", () => {
   it("moves on to the next file without filing, round to the first from the last", async () => {
-    const user = setup("new");
+    const user = setup();
     await screen.findByLabelText("Name");
     expect(screen.getByLabelText("Name")).toHaveValue("scan001.pdf");
     await user.click(screen.getByRole("button", { name: "Skip" }));
@@ -316,33 +304,29 @@ describe("Skip", () => {
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue("scan001.pdf"));
   });
 
-  it("is the s key in both looks, and never types into a field", async () => {
-    for (const look of ["new", "classic"] as const) {
-      const user = setup(look);
-      await screen.findByLabelText("Name");
-      const name = screen.getByLabelText("Name");
-      await user.click(name);
-      await user.keyboard("s"); // typing: no skip
-      expect(name).toHaveValue("scan001.pdfs");
-      (document.activeElement as HTMLElement).blur();
-      await user.keyboard("s");
-      await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue("scan002.pdf"));
-      cleanup();
-      delete document.documentElement.dataset.style;
-    }
+  it("is the s key, and never types into a field", async () => {
+    const user = setup();
+    await screen.findByLabelText("Name");
+    const name = screen.getByLabelText("Name");
+    await user.click(name);
+    await user.keyboard("s"); // typing: no skip
+    expect(name).toHaveValue("scan001.pdfs");
+    (document.activeElement as HTMLElement).blur();
+    await user.keyboard("s");
+    await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue("scan002.pdf"));
   });
 
   it("says so when there is no other file to skip to", async () => {
-    const user = setup("new", [ENTRIES[0]]);
+    const user = setup([ENTRIES[0]]);
     await screen.findByLabelText("Name");
     await user.click(screen.getByRole("button", { name: "Skip" }));
     expect(await screen.findByText("There is no other file in the queue to skip to.")).toBeInTheDocument();
   });
 });
 
-describe("The document bar in the New look", () => {
+describe("The document bar", () => {
   it("has the file's name, zoom, Open and one menu for Open, Print, Open in window and Show in Finder", async () => {
-    const user = setup("new");
+    const user = setup();
     await screen.findByLabelText("Name");
     const bar = screen.getByRole("toolbar", { name: "Document" });
     expect(bar).toHaveTextContent("scan001.pdf");
@@ -351,14 +335,5 @@ describe("The document bar in the New look", () => {
     await user.click(screen.getByRole("button", { name: "More: Print, Open in window, Show in Finder" }));
     const menu = screen.getByRole("menu");
     expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["Open", "Print", "Open in window", expect.stringMatching(/^Show in /)]);
-  });
-
-  it("keeps Classic's toolbar and icon buttons", async () => {
-    setup("classic");
-    await screen.findByLabelText("Name");
-    expect(screen.queryByRole("toolbar", { name: "Document" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "File it" })).toBeInTheDocument();
   });
 });

@@ -1,17 +1,13 @@
-/** Today's smaller cards and notices, shared by the Classic page and the New look's
- * sections: Collections to do, Reminders, the notices under the header, and "is this tray
- * clear". ``Shell`` is the card chrome (Classic: ``Card``; New: its section). */
+/** Today's smaller sections and notices: Collections to do, Reminders and the notices
+ * under the header. ``Shell`` is the section chrome (``Card`` unless the page passes its own). */
 import { Bell, Layers } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Today as TodayData } from "../../api/client";
 import { clockTime, dayWord, localToday, plural, shortDate } from "../../format";
 import { visible } from "../../text";
-import { Banner } from "../Banner";
-import { ImportantBanner } from "../ImportantBanner";
 import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
 import type { CardFrame } from "./frame";
-import type { TrayCardInfo } from "./TrayCard";
 import { collectionHref } from "../../collectionHref";
 
 /** The open collections with something to do: open checklist entries, or files still
@@ -20,7 +16,7 @@ export function needingAttention(data: TodayData) {
   return data.overview.collections.filter((c) => c.open_checks > 0 || c.in_inbox > 0);
 }
 
-/** Shown only while ``needingAttention`` has any (the page leaves the card out). */
+/** Shown only while ``needingAttention`` has any (the page leaves the section out). */
 export function CollectionsCard({ data, frame, Shell = Card }: { data: TodayData; frame: CardFrame; Shell?: typeof Card }) {
   const collections = needingAttention(data);
   return (
@@ -100,18 +96,10 @@ export function RemindersCard({ data, today, frame, Shell = Card }: { data: Toda
   );
 }
 
-export function Notices({ data, traysError, banners = true }: { data: TodayData; traysError: string | null; /** The two Convert banners (the New look shows them as one). */ banners?: boolean }) {
-  const { tray_errors, ongoing_sync_failure, unmanaged_ongoing, unmanaged_important } = data;
+export function Notices({ data, traysError }: { data: TodayData; traysError: string | null }) {
+  const { tray_errors, ongoing_sync_failure } = data;
   return (
     <>
-      {banners && unmanaged_ongoing > 0 && (
-        <Banner
-          label="Ongoing"
-          message={`${plural(unmanaged_ongoing, "entry", "entries")} in ##. Ongoing ${unmanaged_ongoing === 1 ? "is" : "are"} not in the app yet.`}
-          action={{ label: "Convert", to: "/ongoing" }}
-        />
-      )}
-      {banners && <ImportantBanner count={unmanaged_important} />}
       {ongoing_sync_failure && (
         <p className="notice">Ongoing sync is failing: {visible(ongoing_sync_failure)}</p>
       )}
@@ -122,14 +110,5 @@ export function Notices({ data, traysError, banners = true }: { data: TodayData;
         </p>
       ))}
     </>
-  );
-}
-
-/** A tray with nothing open and nothing to show: it joins the one "Clear" card. */
-export function isClear(info: TrayCardInfo, data: TodayData): boolean {
-  return (
-    (info.count?.open ?? 0) === 0 &&
-    !data.attention.some((a) => a.tray === info.id) &&
-    (data.open_items.find((t) => t.tray_id === info.id)?.items.length ?? 0) === 0
   );
 }

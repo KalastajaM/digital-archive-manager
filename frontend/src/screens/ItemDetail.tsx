@@ -4,9 +4,8 @@
  * undated one with how long it has waited. Everything here changes the database only,
  * through the API: adding or removing a file never moves it. */
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleMinus, Eye, X } from "lucide-react";
+import { CircleMinus, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
   errorText,
@@ -28,7 +27,6 @@ import {
   useMoveItem,
   useUndoMoveItem,
 } from "../api/client";
-import { useStyle } from "../appearance";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { Barcode } from "../components/Barcode";
 import { paymentNames } from "../components/payFacts";
@@ -39,7 +37,6 @@ import { CopyButton } from "../components/CopyButton";
 import { DoneForm } from "../components/DoneForm";
 import { EditableTitle } from "../components/EditableTitle";
 import { editText, FieldInput } from "../components/FieldInput";
-import { FilePreview } from "../components/FilePreview";
 import { FILE_BADGE } from "../components/ItemBadges";
 import { RelativeDate } from "../components/RelativeDate";
 import { SavedNote, SaveState } from "../components/SavedNote";
@@ -47,7 +44,7 @@ import { daysBetween, waited } from "../components/today/time";
 import { amountField } from "../components/today/TrayCard";
 import { undoAction, useToast } from "../components/Toasts";
 import { IconButton } from "../components/ui/IconButton";
-import { FileActionBar, type FileActionBarProps, useAskAction } from "../components/FileActionBar";
+import { type FileActionBarProps, useAskAction } from "../components/FileActionBar";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { allMarked, useBatchMark } from "../components/useBatchMark";
 import { toDeleteReason } from "../toDelete";
@@ -61,10 +58,7 @@ import { useAutoSave } from "../components/useAutoSave";
 import { dayOf, fieldLabel, fieldWord, formatDate, formatField, formatMoney, groupIban, plural } from "../format";
 import { visible } from "../text";
 import { AddFile } from "../components/AddFile";
-import { FileMeta } from "../components/FileMeta";
 import { browseHref } from "../components/GroupTree";
-import { FileView } from "../components/FileView";
-import { FileCollections } from "./FileActions";
 import { FilePanel } from "./FilePanel";
 import { FileActionIcons } from "../components/FileActionIcons";
 import { type AssignKind, AssignSheet } from "../components/zones/FromFor";
@@ -145,7 +139,7 @@ const fieldSize = (type: string): "date" | "text" | "money" | "checkbox" =>
 
 /** The item's editable fields on one action row that wraps only when the panel is narrow:
  * the tray's fields in order (a date with its urgency tag after it), then ``trailing``
- * (the done buttons). The file's icon buttons are in the screen's header (``FileActionBar``);
+ * (the done buttons). The file's icon buttons are in the side panel (``FileActionIcons``);
  * the title is edited in the item header. ``part``: a bill shows only the done buttons in
  * its top row and the fields further down. */
 function Fields({
@@ -245,7 +239,7 @@ function ItemSummary({ item }: { item: Item }) {
   );
 }
 
-/** The New look's subtitle part "in collection X": the collections of the file shown. */
+/** The subtitle part "in collection X": the collections of the file shown. */
 function InCollection({ driveId }: { driveId: string }) {
   const links = useFileLinks(driveId);
   const found = (links.data?.collections ?? []).filter((c) => c.kind == null);
@@ -435,8 +429,6 @@ type ItemProps = {
   onClose: () => void;
   /** Opens Quick Look on the item's file (the tray list's). */
   onQuickLook?: () => void;
-  /** The element in the screen's header the file actions are rendered into (``FileActionBar``). */
-  barSlot?: HTMLElement | null;
 };
 
 export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) {
@@ -452,7 +444,7 @@ export default function ItemDetail({ id, ...rest }: ItemProps & { id: number }) 
   return <ItemBody item={query.data} {...rest} />;
 }
 
-function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook, barSlot }: ItemProps & { item: Item }) {
+function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuickLook }: ItemProps & { item: Item }) {
   const files = useItemFiles(item.id);
   const change = useItemFileChange();
   const client = useQueryClient();
@@ -469,20 +461,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const moveItem = useMoveItem();
   const undoMove = useUndoMoveItem();
   const actionsRef = useRef<HTMLDivElement>(null);
-  const [look] = useStyle();
-  const isNew = look === "new";
-  // The New look draws the file's actions in the side panel's icon rows (``FileActionIcons``),
-  // not in the list's header
-  const slot = isNew ? null : barSlot;
   const [assigning, setAssigning] = useState<AssignKind | null>(null);
   const update = useItemUpdate();
   const saveTitle = async (title: string) => (await update.mutateAsync({ id: item.id, title })).title;
-  // Where the file's tags are shown: under the title. They belong to the shown file
-  // (FileMeta), so they are portaled there.
-  const [tagSlot, setTagSlot] = useState<HTMLElement | null>(null);
-  // and the shown file's name and folder, and its preview (blocks of the file view, in order)
-  const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
-  const [previewSlot, setPreviewSlot] = useState<HTMLElement | null>(null);
   const list = files.data ?? [];
   const shown: ItemFile | undefined = list[Math.min(tab, list.length - 1)];
   const nameOf = (f: ItemFile) => visible(f.path ? baseName(f.path) : f.drive_id);
@@ -587,7 +568,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const fileLabel = `${doneText} and file…`;
   const amount = amountField(tray);
   const amountValue = amount ? item.fields[amount] : undefined;
-  const firstPath = list.find((f) => f.path)?.path;
   const open = item.state === "open";
   const anyInInbox = list.some((f) => f.in_inbox);
 
@@ -638,7 +618,7 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
           onClick={() => toggleDone("done")}
         >
           {visible(doneText)}
-          {isNew && <kbd aria-hidden="true">d</kbd>}
+          <kbd aria-hidden="true">d</kbd>
         </TipButton>
         {anyInInbox && (
           <TipButton
@@ -685,7 +665,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   const markable = hasFile && shown ? [{ drive_id: shown.drive_id, name: baseName(shown.path ?? ""), marks: shown.marks }] : [];
   const barProps: FileActionBarProps = {
     barRef: actionsRef,
-    tray: open && !isNew ? { label: "Move to tray", entries: moveEntries } : undefined,
     removeFromTray: { run: () => setRemoving(true), disabled: moveItem.isPending },
     backToInbox:
       hasFile && shown
@@ -696,9 +675,9 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
             reason: inboxWhy,
           }
         : undefined,
-    // Who sent it / who it is for: the New look's icon rows have them for every context
-    sender: isNew && hasFile && shown ? { run: () => setAssigning("sender"), disabled: trash.busy, reason: markReason } : undefined,
-    person: isNew && hasFile && shown ? { run: () => setAssigning("person"), disabled: trash.busy, reason: markReason } : undefined,
+    // Who sent it / who it is for: the icon rows have them for every context
+    sender: hasFile && shown ? { run: () => setAssigning("sender"), disabled: trash.busy, reason: markReason } : undefined,
+    person: hasFile && shown ? { run: () => setAssigning("person"), disabled: trash.busy, reason: markReason } : undefined,
     ask: hasFile ? askBar : undefined,
     star: hasFile
       ? {
@@ -723,7 +702,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
   };
   // (Move to tray is also done by dragging the item onto a tray in the sidebar; this is the
   // way without a mouse. Remove from tray is not a bin: it deletes nothing, the bin is To Delete.)
-  const actionRow = slot && createPortal(<FileActionBar {...barProps} />, slot);
   const { removeFromTray: _item, ...fileIconProps } = barProps;
   void _item;
   const fileIcons = (
@@ -737,10 +715,6 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       onQuickLook={onQuickLook && hasFile ? onQuickLook : undefined}
       showInFolder={hasFile && shown?.path ? () => navigate(browseHref(shown.path!, shown.drive_id)) : undefined}
     />
-  );
-
-  const quickLookButton = onQuickLook && firstPath && (
-    <IconButton icon={<Eye />} label="Quick Look" shortcut="Space" onClick={onQuickLook} />
   );
 
   const tag = open && item.date ? <UrgencyTag date={item.date} today={today} /> : null;
@@ -831,245 +805,111 @@ function ItemBody({ item, trays, today, done: doneMode, setDone, onClose, onQuic
       {filingAI.sheet}
       {fileMove.view}
       {assigning && shown && <AssignSheet kind={assigning} driveIds={[shown.drive_id]} onClose={() => setAssigning(null)} />}
-      {!files.isPending && actionRow}
     </>
   );
-  const collectionsBlock =
-    shown?.path && shown.state !== "missing" ? <FileCollections key={shown.drive_id} driveId={shown.drive_id} hideItem={item.id} /> : null;
-  const previewBlock = (
-    <>
-      <div className="item-files" ref={setPreviewSlot} />
-      {!files.isPending && shown?.path && shown.state !== "missing" && (
-        <FileMeta key={shown.drive_id} file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }} disabled={trash.busy} ai={filingAI}>
-          {(meta) => (
-            <>
-              {headSlot && createPortal(meta.header, headSlot)}
-              {tagSlot && createPortal(meta.tags, tagSlot)}
-              {previewSlot &&
-                createPortal(
-                  <FilePreview
-                    file={{ drive_id: shown.drive_id, path: shown.path ?? "", ext: shown.ext }}
-                    extraTools={<>{quickLookButton}</>}
-                    boxTool={{}}
-                  />,
-                  previewSlot,
-                )}
-            </>
-          )}
-        </FileMeta>
-      )}
-    </>
-  );
-
-  if (isNew) {
-    // The title row with Move to tray… and Close, the fields card with Mark done, then one column
-    // (as Browse): the files, the one file panel for the file shown, the checklist, note and history.
-    const added = formatDate(dayOf(item.created));
-    return (
-      <div className={`item-detail item-${kind} item-new`} {...fileDrop.props}>
-        <header className="item-header">
-          <div className="item-heading">
-            <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
-            <p className="item-sub">
-              {visible(item.tray_name)}
-              {item.tray_removed && " (removed tray)"}
-              {shown?.path && shown.state !== "missing" && <InCollection driveId={shown.drive_id} />}
-              {" · added "}
-              {added}
-            </p>
-          </div>
-          <div className="item-actions">
-            {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
-              <div className="bill-amount">
-                {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
-              </div>
-            )}
-            {open && <Menu label="Move to tray" text="Move to tray…" icon={null} entries={moveEntries} align="end" />}
-            <IconButton
-              icon={<CircleMinus />}
-              label="Remove from tray"
-              tip="Remove from this tray (the files stay where they are)"
-              disabled={moveItem.isPending}
-              onClick={() => setRemoving(true)}
-            />
-          </div>
-          <IconButton icon={<X />} label="Close" onClick={onClose} />
-        </header>
-        {filesError}
-        {removeSheet}
-        {fields}
-        {kind === "waiting" && open && <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>}
-        {doneNote}
-        {donePopover}
-        {fileProblems}
-        {missingNote}
-        <div className="item-stack">
-          {billFacts}
-          {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
-          <section className="item-files-list" aria-label="Files on this item">
-            <h3>Files on this item</h3>
-            {files.isSuccess && (
-              <ul>
-                {list.map((f, i) => (
-                  <li key={f.drive_id} data-shown={f === shown ? "true" : undefined}>
-                    <button
-                      type="button"
-                      className="item-file-pick"
-                      aria-pressed={f === shown}
-                      title={nameOf(f)}
-                      onClick={() => setTab(i)}
-                    >
-                      <span className="item-file">{nameOf(f)}</span>
-                      <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
-                      {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
-                    </button>
-                    {f === shown && list.length > 1 && <span className="item-file-shown">shown</span>}
-                    {list.length > 1 && (
-                      <button
-                        type="button"
-                        className="tab-close"
-                        aria-label={`Remove ${nameOf(f)} from this item`}
-                        data-tip="Take this file off the item (the file stays where it is)"
-                        disabled={change.isPending}
-                        onClick={() => void takeOff(f)}
-                      >
-                        <X size={12} aria-hidden="true" />
-                      </button>
-                    )}
-                  </li>
-                ))}
-                <li className="item-file-add">{addButton}</li>
-              </ul>
-            )}
-            {addPanel}
-          </section>
-          <div className="item-file-panel">
-            {!files.isPending && shown?.path && shown.state !== "missing" ? (
-              <FilePanel
-                key={shown.drive_id}
-                file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }}
-                preview={{ drive_id: shown.drive_id, path: shown.path, ext: shown.ext }}
-                disabled={trash.busy}
-                headerActions={{ ai: filingAI }}
-                actions={fileIcons}
-                hideItem={item.id}
-                compactRelatives
-                boxTool
-              />
-            ) : (
-              <ItemSummary item={item} />
-            )}
-          </div>
-          {checklist}
-          <SavedNote kind="item" target={String(item.id)} />
-          <History item={item} tray={tray} today={today} />
-        </div>
-        {sheets}
-      </div>
-    );
-  }
-
+  // The title row with Move to tray… and Close, the fields card with Mark done, then one column
+  // (as Browse): the files, the one file panel for the file shown, the checklist, note and history.
+  const added = formatDate(dayOf(item.created));
   return (
-    <FileView
-      className={`item-detail item-${kind}`}
-      rootProps={fileDrop.props}
-      header={
-        <>
-        <header className="item-header">
-          <div className="item-heading">
-            <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
-            <p className="item-sub">
-              {visible(item.tray_name)}
-              {item.tray_removed && " (removed tray)"}
-              {firstPath && (
-                <>
-                  {" · "}
-                  <span className="item-file">{visible(baseName(firstPath))}</span>
-                </>
-              )}
-            </p>
-            <div className="item-tags-slot" ref={setTagSlot} />
-          </div>
+    <div className={`item-detail item-${kind} item-new`} {...fileDrop.props}>
+      <header className="item-header">
+        <div className="item-heading">
+          <EditableTitle key={item.id} value={item.title} save={saveTitle} headingId={headingId} />
+          <p className="item-sub">
+            {visible(item.tray_name)}
+            {item.tray_removed && " (removed tray)"}
+            {shown?.path && shown.state !== "missing" && <InCollection driveId={shown.drive_id} />}
+            {" · added "}
+            {added}
+          </p>
+        </div>
+        <div className="item-actions">
           {kind === "bill" && typeof amountValue === "string" && amountValue !== "" && (
             <div className="bill-amount">
               {item.invalid_fields.includes(amount!) ? visible(amountValue) : visible(formatMoney(amountValue))}
             </div>
           )}
-          <IconButton icon={<X />} label="Close" onClick={onClose} />
-        </header>
-        {filesError}
-        {/* one file: a count and the way to attach another; several: the files as tabs */}
-        {list.length > 1 ? (
-          <div className="item-files-line">
-            <div className="tabs" role="tablist" aria-label="Files">
+          {open && <Menu label="Move to tray" text="Move to tray…" icon={null} entries={moveEntries} align="end" />}
+          <IconButton
+            icon={<CircleMinus />}
+            label="Remove from tray"
+            tip="Remove from this tray (the files stay where they are)"
+            disabled={moveItem.isPending}
+            onClick={() => setRemoving(true)}
+          />
+        </div>
+        <IconButton icon={<X />} label="Close" onClick={onClose} />
+      </header>
+      {filesError}
+      {removeSheet}
+      {fields}
+      {kind === "waiting" && open && <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>}
+      {doneNote}
+      {donePopover}
+      {fileProblems}
+      {missingNote}
+      <div className="item-stack">
+        {billFacts}
+        {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
+        <section className="item-files-list" aria-label="Files on this item">
+          <h3>Files on this item</h3>
+          {files.isSuccess && (
+            <ul>
               {list.map((f, i) => (
-                <span key={f.drive_id} className="tab-wrap">
-                  <button type="button" role="tab" aria-selected={f === shown} onClick={() => setTab(i)}>
-                    {nameOf(f)}
+                <li key={f.drive_id} data-shown={f === shown ? "true" : undefined}>
+                  <button
+                    type="button"
+                    className="item-file-pick"
+                    aria-pressed={f === shown}
+                    title={nameOf(f)}
+                    onClick={() => setTab(i)}
+                  >
+                    <span className="item-file">{nameOf(f)}</span>
                     <MarkIcons marks={f.marks} driveId={f.drive_id} path={f.path} />
                     {FILE_BADGE[f.state] && <Tag tone="red">{FILE_BADGE[f.state]}</Tag>}
                   </button>
-                  {/* shown on hover and focus, always reachable by keyboard */}
-                  <button
-                    type="button"
-                    className="tab-close"
-                    aria-label={`Remove ${nameOf(f)} from this item`}
-                    data-tip="Take this file off the item (the file stays where it is)"
-                    disabled={change.isPending}
-                    onClick={() => void takeOff(f)}
-                  >
-                    <X size={12} aria-hidden="true" />
-                  </button>
-                </span>
+                  {f === shown && list.length > 1 && <span className="item-file-shown">shown</span>}
+                  {list.length > 1 && (
+                    <button
+                      type="button"
+                      className="tab-close"
+                      aria-label={`Remove ${nameOf(f)} from this item`}
+                      data-tip="Take this file off the item (the file stays where it is)"
+                      disabled={change.isPending}
+                      onClick={() => void takeOff(f)}
+                    >
+                      <X size={12} aria-hidden="true" />
+                    </button>
+                  )}
+                </li>
               ))}
-            </div>
-            {addButton}
-          </div>
-        ) : (
-          files.isSuccess && (
-            <p className="item-files-line">
-              <span>{plural(list.length, "file")}</span>
-              {list.length === 1 && FILE_BADGE[list[0].state] && <Tag tone="red">{FILE_BADGE[list[0].state]}</Tag>}
-              <span aria-hidden="true">·</span>
-              {addButton}
-            </p>
-          )
-        )}
-        {addPanel}
-          <div className="item-file-head" ref={setHeadSlot} />
-        </>
-      }
-      collections={collectionsBlock}
-      summary={<ItemSummary item={item} />}
-      own={
-        <>
-        {removeSheet}
-        {fields}
-        {kind === "waiting" && open && (
-          <p className="item-waited">Waiting {waited(daysBetween(dayOf(item.created), today))}</p>
-        )}
-        {kind === "bill" && billFacts}
-        {doneNote}
-        {donePopover}
-          {files.isSuccess && (
-            <>
-              {fileProblems}
-              {kind === "dated" && checklist}
-              {missingNote}
-            </>
+              <li className="item-file-add">{addButton}</li>
+            </ul>
           )}
-          {kind === "bill" && <Fields key={`rest-${item.id}`} item={item} tray={tray} part="rest" />}
-          {sheets}
-        </>
-      }
-      preview={previewBlock}
-      notes={
-        <>
-          <SavedNote kind="item" target={String(item.id)} />
-          {kind !== "dated" && checklist}
-          <History item={item} tray={tray} today={today} />
-        </>
-      }
-    />
+          {addPanel}
+        </section>
+        <div className="item-file-panel">
+          {!files.isPending && shown?.path && shown.state !== "missing" ? (
+            <FilePanel
+              key={shown.drive_id}
+              file={{ drive_id: shown.drive_id, path: shown.path, marks: shown.marks }}
+              preview={{ drive_id: shown.drive_id, path: shown.path, ext: shown.ext }}
+              disabled={trash.busy}
+              headerActions={{ ai: filingAI }}
+              actions={fileIcons}
+              hideItem={item.id}
+              compactRelatives
+              boxTool
+            />
+          ) : (
+            <ItemSummary item={item} />
+          )}
+        </div>
+        {checklist}
+        <SavedNote kind="item" target={String(item.id)} />
+        <History item={item} tray={tray} today={today} />
+      </div>
+      {sheets}
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-/** Relatives: the files a document belongs with, in the details panel (New look only).
+/** Relatives: the files a document belongs with, in the details panel.
  *
  * The server ranks them (``GET /api/files/{id}/relatives``) and says why: each shares a
  * folder, sender, tag, collection, IBAN, reference or person with this file. Tick some to

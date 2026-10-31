@@ -29,32 +29,20 @@ function setup(onSearch?: () => void, at = "/browse") {
   );
 }
 
-afterEach(() => {
-  cleanup();
-  delete document.documentElement.dataset.style;
-});
+afterEach(cleanup);
 
-describe("Sidebar rows and the New look", () => {
-  it("name themselves with a tooltip in New (the icon rail has no labels), with the count", async () => {
-    document.documentElement.dataset.style = "new";
+describe("Sidebar rows", () => {
+  it("name themselves with a tooltip (the icon rail has no labels), with the count", async () => {
     setup();
     const inbox = await within(nav()).findByRole("link", { name: "Inbox (7)" });
     expect(inbox).toHaveAttribute("title", "Inbox (7)");
     expect(within(nav()).getByRole("link", { name: "Browse" })).toHaveAttribute("title", "Browse");
     expect(within(nav()).getByRole("link", { name: "Starred" })).toHaveAttribute("title", "Starred");
   });
-
-  it("add no tooltip in Classic", async () => {
-    setup();
-    const inbox = await within(nav()).findByRole("link", { name: "Inbox (7)" });
-    expect(inbox).not.toHaveAttribute("title");
-    expect(within(nav()).getByRole("link", { name: "Browse" })).not.toHaveAttribute("title");
-  });
 });
 
-describe("Sidebar layout in the New look", () => {
-  it("has a search field that opens search and jump, with the shortcut on it; Classic has none", async () => {
-    document.documentElement.dataset.style = "new";
+describe("Sidebar layout", () => {
+  it("has a search field that opens search and jump, with the shortcut on it", async () => {
     const open = vi.fn();
     setup(open);
     const field = await screen.findByRole("button", { name: "Search (⌘K)" });
@@ -62,15 +50,9 @@ describe("Sidebar layout in the New look", () => {
     expect(field).toHaveTextContent("⌘K");
     await userEvent.setup().click(field);
     expect(open).toHaveBeenCalledTimes(1);
-    cleanup();
-    delete document.documentElement.dataset.style;
-    setup(open);
-    await within(nav()).findByRole("link", { name: "Inbox (7)" });
-    expect(screen.queryByRole("button", { name: /^Search/ })).toBeNull();
   });
 
   it("draws a grip and a file count on a collection, and a + for a new one", async () => {
-    document.documentElement.dataset.style = "new";
     setup(() => {});
     const row = await within(nav()).findByRole("link", { name: "Sauna (6)" });
     expect(row.querySelector(".sidebar-grip")).not.toBeNull();
@@ -79,7 +61,6 @@ describe("Sidebar layout in the New look", () => {
   });
 
   it("splits the tags into Pinned and Recent tags and puts the Tags screen in Archive", async () => {
-    document.documentElement.dataset.style = "new";
     setup(() => {});
     await within(nav()).findByRole("link", { name: "insurance (14)" });
     expect(within(nav()).getByRole("button", { name: "Pinned tags section" })).toBeInTheDocument();
@@ -90,7 +71,6 @@ describe("Sidebar layout in the New look", () => {
   });
 
   it("marks Tags and Collections current only while Browse shows that tree, not on any Browse address", async () => {
-    document.documentElement.dataset.style = "new";
     setup(() => {}, "/browse?tree=collections");
     const tags = await within(nav()).findByRole("link", { name: "Tags (3)" });
     expect(tags).not.toHaveAttribute("aria-current");
@@ -99,16 +79,5 @@ describe("Sidebar layout in the New look", () => {
     setup(() => {}, "/browse?tree=tags");
     expect(await within(nav()).findByRole("link", { name: "Tags (3)" })).toHaveAttribute("aria-current", "page");
     expect(within(nav()).getByRole("link", { name: "Collections" })).not.toHaveAttribute("aria-current");
-  });
-
-  it("keeps the Classic arrangement: no grips, no +, one Tags section, Ask first in Archive", async () => {
-    setup();
-    await within(nav()).findByRole("link", { name: "taxes (3)" });
-    expect(nav().querySelector(".sidebar-grip")).toBeNull();
-    expect(within(nav()).queryByRole("link", { name: "New collection" })).toBeNull();
-    expect(within(nav()).getByRole("link", { name: "Sauna" })).toBeInTheDocument(); // no count in the name
-    expect(within(nav()).getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/browse?tree=tags");
-    const rows = within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label") ?? a.textContent);
-    expect(rows.slice(-5)).toEqual(["Ask", "Activity", "Maintenance", "Settings", "Help"]);
   });
 });

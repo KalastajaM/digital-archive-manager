@@ -16,7 +16,7 @@ type Props = {
   /** Runs before the sheet's own Esc handling; ``preventDefault`` to take over. */
   onKeyDown?: (e: KeyboardEvent<HTMLDialogElement>) => void;
   className?: string;
-  /** A line under the title (the New look's rule sheet: what the rule is made from). */
+  /** A line under the title (the rule sheet: what the rule is made from). */
   subtitle?: ReactNode;
   /** A × at the right of the title that closes the sheet like Esc. */
   closeButton?: boolean;

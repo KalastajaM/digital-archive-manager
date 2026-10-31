@@ -1,4 +1,4 @@
-/** The folder tree beside Browse's panes (the New look): the archive's top folders, each
+/** The folder tree beside Browse's panes: the archive's top folders, each
  * opening onto its subfolders when expanded (listed on demand, from the same listing the
  * panes use, so a folder the panes already read costs nothing). The folders the panes are
  * in are highlighted (and marked L / R with two panes) and kept in view: their parents open

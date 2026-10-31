@@ -24,8 +24,8 @@ describe("useCardLayout", () => {
     expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
   });
 
-  it("stores the order and the folded cards under dam.today.layout.v1, and reads them back", () => {
-    expect(LAYOUT_KEY).toBe("dam.today.layout.v1");
+  it("stores the order and the folded cards under dam.today.layout.new.v1, and reads them back", () => {
+    expect(LAYOUT_KEY).toBe("dam.today.layout.new.v1");
     const first = renderHook(() => useCardLayout(DEFAULTS, { inbox: true }));
     act(() => first.result.current.toggle("tray:to-pay"));
     act(() => first.result.current.toggle("inbox"));

@@ -1,4 +1,4 @@
-/** Browse in the New look: the folder tree beside the panes (lazy children, the folders the
+/** Browse: the folder tree beside the panes (lazy children, the folders the
  * panes are in, keyboard, opening, dropping on a folder) and the details panel beside two
  * panes too (the selected file, several files, the actions with their keys). */
 import { cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -81,11 +81,9 @@ const pane = (name: "Left pane" | "Right pane") => screen.getByRole("region", { 
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
   document.dispatchEvent(new Event("dragend"));
 });
 
@@ -223,16 +221,6 @@ describe("The folder tree", () => {
     const away = item("Backup");
     expect(away).toHaveTextContent("Not connected");
     expect(away).not.toHaveAttribute("aria-expanded");
-  });
-
-  it("Classic has no tree and no details beside two panes", async () => {
-    delete document.documentElement.dataset.style;
-    setup(two("10. Financial", "13. Taxes"));
-    await screen.findByText("x.pdf");
-    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Folders" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Folder tree" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Preview" })).not.toBeInTheDocument();
   });
 });
 

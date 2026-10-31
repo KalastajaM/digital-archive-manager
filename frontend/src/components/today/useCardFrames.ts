@@ -1,4 +1,4 @@
-/** What each Today card (or New section) gets from the layout: its fold, and the header
+/** What each Today section gets from the layout: its fold, and the header
  * attributes for dragging and for Option-Up / Option-Down, plus the moves for visible
  * Move up / Move down buttons. After a keyboard move the card may land in another
  * column (a new element): the focus goes back to its header button so the keys can move

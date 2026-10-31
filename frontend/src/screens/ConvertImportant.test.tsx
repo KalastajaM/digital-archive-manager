@@ -236,7 +236,7 @@ describe("the Important page and its sidebar row", () => {
     const link = await within(nav).findByRole("link", { name: "Important (1)" });
     expect(link).toHaveAttribute("href", "/important");
     const names = within(nav).getAllByRole("link").map((a) => a.getAttribute("href"));
-    expect(names.indexOf("/important")).toBe(names.indexOf("/browse?tree=collections") + 1); // first in Collections
+    expect(names.indexOf("/important")).toBe(names.indexOf("/browse?tree=collections&new=1") + 1); // first in Collections, after the section's "+"
     await user.click(link);
     const page = await screen.findByRole("region", { name: "Important" });
     expect(await within(page).findByRole("heading", { name: "! Important" })).toBeInTheDocument();
@@ -248,8 +248,8 @@ describe("the Important page and its sidebar row", () => {
     expect(within(page).getByText(/2 not in the app yet/)).toBeInTheDocument(); // beside the count
     // the selected file's toggles; its row shows its icon
     const selected = within(page).getByRole("complementary", { name: "Selected file" });
-    // (the file's actions are in the page's header)
-    expect(within(page).getByRole("toolbar", { name: "! Important file actions" })).toBeInTheDocument();
+    // (the file's actions are the icon rows of its panel)
+    expect(within(selected).getByRole("group", { name: "File it" })).toBeInTheDocument();
     expect(await within(page).findByRole("button", { name: "Unmark Important" })).toBeInTheDocument();
     // the ! toggle is the way out: no second "Remove from Important" button
     expect(within(selected).queryByRole("button", { name: /^Remove from Important/ })).not.toBeInTheDocument();

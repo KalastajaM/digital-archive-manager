@@ -1,4 +1,4 @@
-/** Settings > Reading documents (New look): the address area drawn on a sample letter the
+/** Settings > Reading documents: the address area drawn on a sample letter the
  * owner picks from their computer. The letter is never added to the archive. */
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -35,11 +35,9 @@ const SAMPLE = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete document.documentElement.dataset.style;
 });
 
 function setup(routes: Record<string, unknown> = {}) {
-  document.documentElement.dataset.style = "new";
   const calls = mockFetch({
     "GET /api/settings/people": { body: PEOPLE },
     "PUT /api/settings/people": { body: PEOPLE },
@@ -137,12 +135,5 @@ describe("The address area from a sample letter", () => {
     await user.click(within(region).getByRole("button", { name: "Close" }));
     expect(within(region).queryByRole("img", { name: "Page 1 of the sample letter" })).toBeNull();
     expect(calls.some((c) => c.method === "PUT")).toBe(false);
-  });
-
-  it("is not in Classic", async () => {
-    mockFetch({ "GET /api/settings/people": { body: PEOPLE } } as never);
-    renderWithProviders(<AddressAreaSettings />);
-    await screen.findByRole("region", { name: "Address area" });
-    expect(screen.queryByRole("region", { name: "Sample letter" })).toBeNull();
   });
 });

@@ -447,7 +447,7 @@ function ModeChoice({
           </label>
         ))}
       </fieldset>
-      {/* the New look shows this line under the choices; Classic hides it (the key hints at the foot of Browse say it) */}
+      {/* the line under the choices */}
       <p className="drop-mode-note">Holding ⌥ while dropping picks Copy.</p>
     </>
   );

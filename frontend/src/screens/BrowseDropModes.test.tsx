@@ -164,7 +164,7 @@ describe("Move / Link / Copy on a drop", () => {
     expect(posts(calls, "/api/browse/move/preview").map((c) => c.body)).toEqual([{ drive_ids: ["fx"], folder: BANKS }]);
   });
 
-  it("says in a line of its own that holding Option picks Copy (shown by the New look)", async () => {
+  it("says in a line of its own that holding Option picks Copy", async () => {
     setup(one("10. Financial"), { "POST /api/browse/move/preview": byMode });
     await screen.findByText("x.pdf");
     dropOn(rowOf(listing(), "Banks"), dragFrom(rowOf(listing(), "x.pdf")));
@@ -380,7 +380,7 @@ describe("Refused targets say why, visibly, and a drop there says it in a toast"
   it("a folder dragged onto another folder is a move only: Option does not switch to Copy", async () => {
     const plan = [op("move", "10. Financial", "13. Taxes/10. Financial", "d-10. Financial")];
     const { calls } = setup(one(""), { "POST /api/browse/move/preview": { body: plan } });
-    await screen.findByText("13. Taxes");
+    await within(await screen.findByRole("list", { name: "Folder contents" })).findByText("13. Taxes");
     const dt = dragFrom(rowOf(listing(), "10. Financial"));
     const target = rowOf(listing(), "13. Taxes");
     dropOn(target, dt, true);

@@ -1,4 +1,4 @@
-/** The tag tree beside Browse's panes (the New look): the tags by group as on the Tags screen
+/** The tag tree beside Browse's panes: the tags by group as on the Tags screen
  * (each group's tags by name, then those in no group), each with its number of files, and a
  * box above them that narrows the list. A click lists the tag's files in Browse (a `tag:`
  * search); Cmd-click (Ctrl-click) adds the tag to those already picked.

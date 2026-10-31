@@ -75,11 +75,10 @@ const platform = (value: string) => Object.defineProperty(navigator, "platform",
 afterEach(() => {
   cleanup();
   platform("MacIntel");
-  delete document.documentElement.dataset.style;
 });
 
 describe("Search and jump", () => {
-  it("opens on Cmd+K on a Mac, in Classic too, and Ctrl+K does nothing there", async () => {
+  it("opens on Cmd+K on a Mac, and Ctrl+K does nothing there", async () => {
     setup();
     press({ key: "k", ctrlKey: true });
     expect(dialog()).toBeNull();

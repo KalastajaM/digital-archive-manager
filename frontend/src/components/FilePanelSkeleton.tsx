@@ -1,4 +1,4 @@
-/** The New look's one skeleton for the file panel on the right of Browse, the Inbox, a tray and a
+/** The one skeleton for the file panel on the right of Browse, the Inbox, a tray and a
  * collection. Top to bottom:
  *
  *  1. header       the name (fixed-width face), the folder, the lock

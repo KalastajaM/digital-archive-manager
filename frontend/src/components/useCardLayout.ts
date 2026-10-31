@@ -1,5 +1,5 @@
 /** Today's card layout: the order of the cards in their columns and which are folded,
- * kept in this browser's localStorage (``dam.today.layout.v1``).
+ * kept in this browser's localStorage (``dam.today.layout.new.v1``).
  *
  * The order is stored as one sequence, top to bottom, with ``"|"`` between columns, so
  * Move up and Move down walk through every card (past the bottom of a column to the top
@@ -9,9 +9,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { archiveKey } from "../api/client";
 
-export const LAYOUT_KEY = "dam.today.layout.v1";
-/** The New look arranges its own sections (a different set from Classic's cards). */
-export const LAYOUT_KEY_NEW = "dam.today.layout.new.v1";
+export const LAYOUT_KEY = "dam.today.layout.new.v1";
 /** A dragged Today card: never ``application/x-dam-files``, so a card can never be
  * dropped as files and files never as a card. */
 export const CARD_DRAG_TYPE = "application/x-dam-card";

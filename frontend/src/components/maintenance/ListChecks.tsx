@@ -14,7 +14,6 @@ import {
   useRemoveBrokenLinks,
   useStatus,
 } from "../../api/client";
-import { useStyle } from "../../appearance";
 import { changeToast } from "../collectionText";
 import { inFileManager } from "../../fileManager";
 import { dialogOpen } from "../../keyboard";
@@ -38,14 +37,6 @@ import { collectionHref } from "../../collectionHref";
 
 export const refusal = (e: unknown) => (e instanceof ApiError && e.detail ? e.detail : errorText(e));
 
-/** What a folded check card shows in place of its body. */
-export function foldedLine(check: Check, found: string | null) {
-  if (check.running) return "Checking…";
-  if (check.error || check.job?.state === "error") return "The check failed.";
-  if (check.job === null) return "Not checked yet.";
-  return found ?? "Nothing found.";
-}
-
 /** In a check card's header: forgets the check's result (a running check is ended);
  * nothing in the archive changes. */
 export function ResetButton({ check, title, busy = false }: { check: Check; title: string; busy?: boolean }) {
@@ -62,7 +53,7 @@ export function ResetButton({ check, title, busy = false }: { check: Check; titl
   );
 }
 
-/** The New look's status line of a check ("3 groups found · today 14:10"): what its
+/** The status line of a check ("3 groups found · today 14:10"): what its
  * result says, when it ended in this browser if known, and a tone for the colour. */
 export function checkStatus(check: Check, found: boolean, summary: string): { text: string; tone: "found" | "clean" | "never" | "running" | "error" } {
   if (check.running) return { text: "Checking…", tone: "running" };
@@ -116,8 +107,7 @@ export function CheckHead({
 }
 
 /** A check's card: what it looks for, its button, progress with Stop, and the result.
- * Folded, it shows one line: what the check found, or that it has not run. In the New look
- * the card is a row: title, status line and the button in its header, then what it looks
+ * The card is a row: title, status line and the button in its header, then what it looks
  * for and the result. */
 export function CheckCard({
   title,
@@ -153,35 +143,18 @@ export function CheckCard({
 }) {
   const ended = check.job !== null && !check.running;
   const fold = useFold(kind);
-  const [look] = useStyle();
-  const isNew = look === "new";
   const reset = <ResetButton check={check} title={title} />;
-  const head = isNew ? <CheckHead check={check} found={found} summary={summary} label={buttonLabel} onStart={() => check.start()} reset={reset} /> : reset;
+  const head = <CheckHead check={check} found={found} summary={summary} label={buttonLabel} onStart={() => check.start()} reset={reset} />;
   if (fold?.folded)
     return (
       <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={head}>
-        {isNew ? null : <p className="hint">{foldedLine(check, found ? summary : empty || null)}</p>}
+        {null}
       </Card>
     );
   return (
     <Card title={title} icon={icon} className={`check-card check-${kind}`} fold={fold} actions={head}>
       <p>{intro}</p>
-      {isNew ? (
-        extra && <div className="check-actions">{extra}</div>
-      ) : (
-        <div className="check-actions">
-          {check.running ? (
-            <button type="button" onClick={check.stop}>
-              Stop
-            </button>
-          ) : (
-            <button type="button" className="primary" onClick={() => check.start()} disabled={check.starting}>
-              {ended ? `${buttonLabel} again` : buttonLabel}
-            </button>
-          )}
-          {extra}
-        </div>
-      )}
+      {extra && <div className="check-actions">{extra}</div>}
       {check.running && check.job && <JobProgress job={check.job} noun="items" />}
       {check.error && (
         <p className="error" role="alert">

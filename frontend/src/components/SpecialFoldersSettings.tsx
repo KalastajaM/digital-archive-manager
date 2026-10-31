@@ -1,4 +1,4 @@
-/** Settings → Archive folders → Special folders (New look): the Inbox, Ongoing, Important and
+/** Settings → Archive folders → Special folders: the Inbox, Ongoing, Important and
  * To Delete folders with their names, and a Rename for each. Renaming asks for the new name,
  * previews every place the name is stored (what is renamed, rebuilt or stays as it is), then
  * renames. The change is one entry in Activity and the toast offers Undo. */

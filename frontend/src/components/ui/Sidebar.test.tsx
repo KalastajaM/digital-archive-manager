@@ -45,7 +45,7 @@ const SAUNA: CollectionRow = {
   path: ["Sauna"],
   kind: null,
   position: 0,
-  files: 1,
+  files: 0,
   open_checks: 0,
 };
 

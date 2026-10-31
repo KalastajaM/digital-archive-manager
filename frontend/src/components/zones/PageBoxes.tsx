@@ -20,7 +20,6 @@ import {
   useFileSuggestions,
   useRules,
 } from "../../api/client";
-import { useStyle } from "../../appearance";
 import { isShortcut, useKeydown } from "../../keyboard";
 import { visible, withoutNoise } from "../../text";
 import { IconButton } from "../ui/IconButton";
@@ -99,8 +98,6 @@ function ActiveBoxes({
 function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote: boolean): Boxes {
   const active = pageOne;
   const [on, setOn] = useState(false);
-  const [look] = useStyle();
-  const isNew = look === "new";
   // every box drawn is kept (numbered) until it is removed or the panel is closed
   const [boxes, setBoxes] = useState<KeptBox[]>([]);
   const nextId = useRef(1);
@@ -259,7 +256,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
           onClose={() => setChanged(null)}
         />
       )}
-      {isNew && <DocumentAddressArea driveId={driveId} open={on || showAreas} />}
+      <DocumentAddressArea driveId={driveId} open={on || showAreas} />
       {on && (
     <>
       {!splitNote && note}

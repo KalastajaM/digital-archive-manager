@@ -1,7 +1,6 @@
 import { ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
 import { type Archive, errorText, navigation, switchArchive, useArchives, useStatus } from "../api/client";
-import { useStyle } from "../appearance";
 import { archiveSource } from "../archiveSource";
 import { groupDigits } from "../format";
 import { visible } from "../text";
@@ -12,7 +11,7 @@ import { type MenuEntry, Menu } from "./ui/Menu";
 
 const FALLBACK_COLOR = "#3b6fd4";
 
-/** New look: the line under the archive's name, "Google Drive · 2 418 files": where the
+/** The line under the archive's name, "Google Drive · 2 418 files": where the
  * folder lives (from its path) and how many files the index knows. Without a file count
  * (the status has not arrived) the place alone is shown. */
 function ArchiveLine({ root }: { root: string | null }) {
@@ -28,7 +27,6 @@ function ArchiveLine({ root }: { root: string | null }) {
  * another dam window has open is listed but cannot be switched to. */
 export function ArchiveSwitcher() {
   const list = useArchives();
-  const [look] = useStyle();
   const toast = useToast();
   const [sheet, setSheet] = useState<"add" | "manage" | null>(null);
   const [switching, setSwitching] = useState(false);
@@ -77,29 +75,18 @@ export function ArchiveSwitcher() {
         <Menu
           label={`Archive: ${name}`}
           icon={
-            look === "new" ? (
-              <span className="archive-tile" style={{ background: color }} aria-hidden="true">
-                {Array.from(name)[0]?.toUpperCase()}
-              </span>
-            ) : (
-              <span className="archive-dot" style={{ background: color }} />
-            )
+            <span className="archive-tile" style={{ background: color }} aria-hidden="true">
+              {Array.from(name)[0]?.toUpperCase()}
+            </span>
           }
           text={
-            look === "new" ? (
-              <>
-                <span className="archive-text">
-                  <span className="archive-name">{name}</span>
-                  {current?.archive_root && <ArchiveLine root={current.archive_root} />}
-                </span>
-                <ChevronsUpDown className="archive-chevron" size={14} strokeWidth={2} aria-hidden="true" />
-              </>
-            ) : (
-              <>
+            <>
+              <span className="archive-text">
                 <span className="archive-name">{name}</span>
-                <ChevronsUpDown className="archive-chevron" size={12} strokeWidth={2} aria-hidden="true" />
-              </>
-            )
+                {current?.archive_root && <ArchiveLine root={current.archive_root} />}
+              </span>
+              <ChevronsUpDown className="archive-chevron" size={14} strokeWidth={2} aria-hidden="true" />
+            </>
           }
           triggerClassName="archive-button"
           entries={entries}

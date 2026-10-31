@@ -1,8 +1,7 @@
-/** A tray in the New look, laid out as drawn: the list pane with its own header (name, count,
+/** A tray, laid out as drawn: the list pane with its own header (name, count,
  * Add file, Open and Done with their counts) and rows with a second line, the item pane with
  * its own header (Move to tray…, the file's actions, Close), the fields card with Mark done,
- * then the files, checklist, note and history beside the summary and the document. Classic
- * renders none of it. */
+ * then the files, checklist, note and history beside the summary and the document. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -76,12 +75,10 @@ function setup() {
 beforeEach(() => localStorage.clear());
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-describe("a tray in New", () => {
+describe("a tray", () => {
   it("heads the list pane with the name, the count, Add file and Open and Done with their counts", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     const list = await screen.findByRole("region", { name: "Tray items" });
     const head = list.querySelector(".trays-toolbar") as HTMLElement;
@@ -94,14 +91,12 @@ describe("a tray in New", () => {
   });
 
   it("gives each row a second line: who it waits for, its files and its checklist", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     const row = await screen.findByRole("article", { name: "Builder quote, sauna" });
     expect(row.querySelector(".tray-row-meta")).toHaveTextContent("Waiting for: Revised quote from the builder · 2 files · Checklist 1 of 3");
   });
 
   it("puts Move to tray…, the file's actions and Close in the item's own header", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     const item = await screen.findByRole("region", { name: "Item" });
     const head = await waitForHeader(item);
@@ -112,7 +107,6 @@ describe("a tray in New", () => {
   });
 
   it("lays the item out in one column: the fields card, the files, the file panel, then checklist and note", async () => {
-    document.documentElement.dataset.style = "new";
     setup();
     const item = await screen.findByRole("region", { name: "Item" });
     await waitForHeader(item);
@@ -151,16 +145,6 @@ describe("a tray in New", () => {
     // the fields card comes before the column
     const kids = [...(item.querySelector(".item-new") as HTMLElement).children].map((c) => c.className);
     expect(kids.findIndex((c) => c.includes("item-fields"))).toBeLessThan(kids.findIndex((c) => c.includes("item-stack")));
-  });
-
-  it("renders none of it in Classic", async () => {
-    setup();
-    await screen.findByRole("article", { name: "Builder quote, sauna" });
-    expect(document.querySelector(".tray-row-meta")).toBeNull();
-    expect(document.querySelector(".seg-count")).toBeNull();
-    expect(document.querySelector(".item-new")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Relatives/ })).toBeNull();
-    expect(document.querySelector(".trays-list > .trays-toolbar")).toBeNull();
   });
 });
 

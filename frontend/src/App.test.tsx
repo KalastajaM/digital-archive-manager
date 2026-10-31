@@ -75,13 +75,13 @@ describe("App shell", () => {
     const first = renderApp();
     await waitFor(() =>
       expect(screen.getByTestId("status-line")).toHaveTextContent(
-        "3 in inbox · 8 searchable · page 1 read 1 240 of 10 875 · 1 waiting · 1 error",
+        "8 of 10 files searchable3 in inbox · page 1 read 1 240 of 10 875 · 1 waiting · 1 error",
       ),
     );
     first.unmount();
     mockFetch({ "GET /api/status": { body: { ...STATUS, page1: page1(10875) } }, ...BASE });
     renderApp();
-    await waitFor(() => expect(screen.getByTestId("status-line")).toHaveTextContent("3 in inbox · 8 searchable · 1 waiting"));
+    await waitFor(() => expect(screen.getByTestId("status-line")).toHaveTextContent("3 in inbox · 1 waiting"));
     expect(screen.getByTestId("status-line")).not.toHaveTextContent("page 1");
   });
 
@@ -92,7 +92,7 @@ describe("App shell", () => {
     });
     renderApp();
     await waitFor(() =>
-      expect(screen.getByTestId("status-line")).toHaveTextContent("3 in inbox · 8 searchable · 1 waiting · 1 error"),
+      expect(screen.getByTestId("status-line")).toHaveTextContent("8 of 10 files searchable3 in inbox · 1 waiting · 1 error"),
     );
     const nav = screen.getByRole("navigation", { name: "Main" });
     await within(nav).findByRole("link", { name: "Inbox (3)" });
@@ -103,17 +103,18 @@ describe("App shell", () => {
       ["Browse", "/browse"],
       ["Trays", "/trays"],
       ["Collections", "/browse?tree=collections"],
+      ["New collection", "/browse?tree=collections&new=1"],
       ["Important", "/important"],
       ["Starred", "/browse?tree=collections&q=is%3Astarred"],
       ["Tags", "/browse?tree=tags"],
-      ["Ask", "/ask"],
       ["Activity", "/activity"],
       ["Maintenance", "/maintenance"],
+      ["Ask", "/ask"],
       ["Settings", "/settings"],
       ["Help", "/help"],
     ]);
     expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
-    expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run recovery" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Archive unavailable" })).not.toBeInTheDocument();
   });
@@ -154,24 +155,14 @@ describe("App shell", () => {
     expect(badge).toHaveAttribute("title", "bad.yaml: line 1: id: required");
   });
 
-  it("the status line is its own tooltip in the New look, where the icon rail shrinks it to a dot", async () => {
+  it("the status line is its own tooltip, where the icon rail shrinks it to a dot", async () => {
     mockFetch({ "GET /api/status": { body: STATUS }, ...BASE });
     renderApp();
-    const badge = await screen.findByTestId("status-line");
-    expect(badge).not.toHaveAttribute("title"); // Classic: the text is all there is
-    cleanup();
-    document.documentElement.dataset.style = "new";
-    try {
-      mockFetch({ "GET /api/status": { body: STATUS }, ...BASE });
-      renderApp();
-      const line = await screen.findByTestId("status-line");
-      // the full one-line status, though the line itself shows two lines
-      expect(line).toHaveAttribute("title", "3 in inbox · 8 searchable · 1 waiting · 1 error");
-      expect(line).toHaveTextContent("8 of 10 files searchable");
-      expect(line).toHaveTextContent("3 in inbox · 1 waiting · 1 error");
-    } finally {
-      delete document.documentElement.dataset.style;
-    }
+    const line = await screen.findByTestId("status-line");
+    // the full one-line status, though the line itself shows two lines
+    expect(line).toHaveAttribute("title", "3 in inbox · 8 searchable · 1 waiting · 1 error");
+    expect(line).toHaveTextContent("8 of 10 files searchable");
+    expect(line).toHaveTextContent("3 in inbox · 1 waiting · 1 error");
   });
 
   it("shows a banner when the archive folder is not available", async () => {
@@ -234,7 +225,6 @@ describe("the old Collections, Tags and Starred addresses", () => {
       "GET /api/tags/all": { body: { tags: [], groups: [] } },
       "GET /api/marks/collection/starred": { body: { id: 90, kind: "starred", members: [], groups: [] } },
     });
-    document.documentElement.dataset.style = "new";
     renderWithProviders(
       <MemoryRouter initialEntries={[url]}>
         <App />
@@ -243,10 +233,7 @@ describe("the old Collections, Tags and Starred addresses", () => {
     );
   };
   const where = () => screen.getByTestId("where").textContent;
-  afterEach(() => {
-    cleanup();
-    delete document.documentElement.dataset.style;
-  });
+  afterEach(cleanup);
 
   it("/collections forwards to Browse's Collections tree", async () => {
     open("/collections");

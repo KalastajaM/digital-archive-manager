@@ -39,24 +39,12 @@ function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
   return { calls, user: userEvent.setup() };
 }
 
-const useLook = (look: "new" | "classic") => {
-  document.documentElement.dataset.style = look;
-};
 afterEach(() => {
-  delete document.documentElement.dataset.style;
   setQuarantineName(undefined);
 });
 
-describe("Special folders (New look)", () => {
-  it("is not in Classic", async () => {
-    setup();
-    await screen.findByText("Main folder");
-    expect(screen.queryByText("Special folders")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Rename the/ })).toBeNull();
-  });
-
+describe("Special folders", () => {
   it("lists the four folders with their names and a Rename each", async () => {
-    useLook("new");
     setup();
     const list = await screen.findByRole("list", { name: "Special folders" });
     const rows = within(list).getAllByRole("listitem");
@@ -69,7 +57,6 @@ describe("Special folders (New look)", () => {
   });
 
   it("previews every place, then renames and offers Undo in a toast", async () => {
-    useLook("new");
     const { calls, user } = setup({ "POST /api/activity/batch-1/undo": { body: { batch_id: "u1" } } });
     await user.click(await screen.findByRole("button", { name: "Rename the Inbox folder" }));
     const dialog = await screen.findByRole("dialog", { name: "Rename the Inbox folder" });
@@ -98,7 +85,6 @@ describe("Special folders (New look)", () => {
   });
 
   it("changing the name asks for a new preview before renaming", async () => {
-    useLook("new");
     const { calls, user } = setup();
     await user.click(await screen.findByRole("button", { name: "Rename the Inbox folder" }));
     const dialog = await screen.findByRole("dialog");
@@ -114,7 +100,6 @@ describe("Special folders (New look)", () => {
   });
 
   it("shows the server's reason when the name or the state refuses", async () => {
-    useLook("new");
     const { user } = setup({
       [`POST ${URL}`]: { status: 409, body: { error: "An operation was interrupted. Run recovery first." } },
     });
@@ -126,7 +111,6 @@ describe("Special folders (New look)", () => {
   });
 
   it("Cancel closes the sheet without renaming", async () => {
-    useLook("new");
     const { calls, user } = setup();
     await user.click(await screen.findByRole("button", { name: "Rename the Ongoing folder" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));

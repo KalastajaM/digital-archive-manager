@@ -112,8 +112,8 @@ const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "
 const patches = (calls: Call[], url: string) => calls.filter((c) => c.method === "PATCH" && c.url === url);
 const where = () => screen.getByTestId("where").textContent;
 const panel = () => screen.getByRole("region", { name: "Collection" });
-/** The header's file actions (the one FileActionBar, over the side panel). */
-const bar = () => within(panel()).getByRole("toolbar", { name: /file actions$/ });
+/** The file's icon rows in the side panel (``FileActionIcons``). */
+const bar = () => panel().querySelector<HTMLElement>(".file-actions-icons")!;
 const tree = () => within(panel()).getByRole("tree", { name: "Members" });
 
 /** Open the ⋯ menu of the toolbar and pick ``item``. */
@@ -189,7 +189,7 @@ describe("Collection detail", () => {
     expect(await within(panel()).findByText("plan refused: x")).toBeInTheDocument();
   });
 
-  it("the inspector is Browse's file panel (rename, preview, tags, Add to collection, summary, note) with Quick Look; the file actions are in the header", async () => {
+  it("the inspector is Browse's file panel (rename, preview, tags, Add to collection, summary, note) with Quick Look; the file actions are its icon rows", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("tree", { name: "Members" });
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
@@ -200,34 +200,13 @@ describe("Collection detail", () => {
     expect(within(inspector).getByRole("region", { name: "Tags" })).toBeInTheDocument();
     expect(within(inspector).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inspector).getByRole("textbox", { name: "Note on this file" })).toBeInTheDocument();
-    // what acts on the file is in the header, not repeated in the panel
+    // what acts on the file is in the icon rows, once
     for (const name of ["Put in tray", "Star", "Mark Important", "Ask AI", "Move to To Delete", "Remove quote.pdf from the collection"]) {
-      expect(within(inspector).queryByRole("button", { name })).toBeNull();
+      expect(within(bar()).getAllByRole("button", { name })).toHaveLength(1);
     }
   });
 
-  it("the header has the collection's list actions at the left and the shown file's actions in one group at the right, in the app's order", async () => {
-    renderCollections("/collections/7");
-    await within(panel()).findByRole("tree", { name: "Members" });
-    const toolbar = panel().querySelector("header.toolbar") as HTMLElement;
-    const lead = toolbar.querySelector(".toolbar-lead") as HTMLElement;
-    expect(within(lead).getByRole("heading", { level: 2 })).toBeInTheDocument();
-    expect(within(lead).queryByRole("button", { name: "New group" })).toBeNull(); // only Important has groups
-    expect(within(lead).getByRole("button", { name: "Export…" })).toBeInTheDocument();
-    // the file actions are not in the lead, and not in the list actions
-    expect(within(lead).queryByRole("button", { name: "Star" })).toBeNull();
-    expect(toolbar.lastElementChild).toBe(bar());
-    const names = ["Put in tray", "Remove quote.pdf from the collection", "Ask AI", "Star", "Mark Important", "Move to To Delete"];
-    const buttons = names.map((name) => within(bar()).getByRole("button", { name }));
-    for (let i = 1; i < buttons.length; i++) {
-      expect(buttons[i - 1].compareDocumentPosition(buttons[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    }
-    // the preview's toolbar keeps only viewing tools
-    const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
-    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toBeInTheDocument();
-  });
-
-  it("a disabled file action in the header says why", async () => {
+  it("a disabled file action says why", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("tree", { name: "Members" });
     // the second member is missing: its bin is off, with the reason as the tooltip
@@ -240,27 +219,27 @@ describe("Collection detail", () => {
     expect(within(bar()).queryByRole("button", { name: "Ask AI" })).toBeNull();
   });
 
-  it("the inspector has the file view's one block order; the collection's own parts are in the own block", async () => {
-    renderCollections("/collections/7");
+  it("the inspector has the file view's one block order; the collection's Group is under its collections", async () => {
+    renderCollections("/collections/7", { "GET /api/collections/7": { body: GROUPED } });
     await within(panel()).findByRole("tree", { name: "Members" });
+    await userEvent.setup().click(within(tree()).getByText("quote.pdf")); // a file, not the folder selected first
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     await within(inspector).findByRole("region", { name: "Tags" });
     const blocks = Array.from(inspector.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "tags", "collections", "summary", "own", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "group", "summary", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => inspector.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
-    expect(within(inBlock("own")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();
-    expect(within(inBlock("own")).queryByRole("button", { name: "Put in tray" })).toBeNull(); // in the header
+    expect(within(inBlock("group")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();
+    expect(within(inBlock("group")).queryByRole("button", { name: "Put in tray" })).toBeNull(); // in the actions block
   });
 
-  it("Quick Look is an icon button with a tooltip; the members scroll in their own box; Ask AI is in the header", async () => {
+  it("Quick Look is an icon button with a tooltip; the members scroll in their own box; Ask AI is in the icon rows", async () => {
     renderCollections("/collections/7");
     const members = await within(panel()).findByRole("tree", { name: "Members" });
     expect(members.closest(".collection-members")).not.toBeNull();
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
-    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look Space");
+    expect(within(inspector).getByRole("button", { name: "Quick Look" })).toHaveAttribute("data-tip", "Quick Look (Space)");
     expect(await within(bar()).findByRole("button", { name: "Ask AI" })).toHaveAttribute("data-tip", expect.stringContaining("Ask AI to suggest"));
-    expect(within(inspector).queryByRole("button", { name: "Ask AI" })).toBeNull();
   });
 
   it("the file panel of a member has the Draw a box tool, as in Browse", async () => {
@@ -269,7 +248,7 @@ describe("Collection detail", () => {
     expect(await within(inspector).findByRole("button", { name: "Draw a box" })).toBeInTheDocument();
   });
 
-  it("a collection with files but no groups hints at New group, which does what the toolbar icon does", async () => {
+  it("Important's Files by group head has New group, which sorts the files into groups", async () => {
     const created: Group = { id: 9, collection_id: 7, parent_id: null, name: "New group", position: 0, summary: "" };
     let now: Collection = { ...SAUNA, kind: "important" }; // only Important has groups
     const { calls, user } = renderCollections("/collections/7", {
@@ -279,17 +258,10 @@ describe("Collection detail", () => {
         return { body: changeOf(now) };
       },
     });
-    const hint = await within(panel()).findByText(/^Group files:/);
-    await user.click(within(hint.closest("p")!).getByRole("button", { name: "New group" }));
+    const add = await within(panel()).findByRole("button", { name: "New group" });
+    expect(add).toHaveAttribute("title", "Sort the files into groups");
+    await user.click(add);
     await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(1));
-    await waitFor(() => expect(within(panel()).queryByText(/^Group files:/)).not.toBeInTheDocument());
-  });
-
-  it("the toolbar's New group icon says what groups are for", async () => {
-    renderCollections("/collections/7", { "GET /api/collections/7": { body: { ...SAUNA, kind: "important" } } });
-    await within(panel()).findByRole("tree", { name: "Members" });
-    const icon = within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" });
-    expect(icon).toHaveAttribute("data-tip", "New group: sort files into groups");
   });
 
   it("the inspector has a resizable splitter", async () => {
@@ -314,12 +286,11 @@ describe("Collection detail", () => {
     expect(await within(inspector).findByRole("textbox", { name: "File name" })).toHaveValue("quote");
   });
 
-  it("the subtitle counts files and folders apart", async () => {
+  it("the header counts files and folders apart", async () => {
     renderCollections("/collections/7");
     await within(panel()).findByRole("tree", { name: "Members" });
-    const subtitle = panel().querySelector(".toolbar-subtitle")!;
     // one counting rule on every screen: the folders, then every usable file (the list's count)
-    expect(subtitle).toHaveTextContent(/^Open · 1 folder · 3 files$/);
+    expect(panel().querySelector(".collection-head-count")).toHaveTextContent(/^1 folder · 3 files$/);
   });
 
   it("without groups a folded Ungrouped (kept from before) hides nobody from j/k", () => {
@@ -334,7 +305,7 @@ describe("Collection detail", () => {
       "GET /api/collections": { body: [row(one, 23, 0)] },
     });
     const members = await within(panel()).findByRole("tree", { name: "Members" });
-    await waitFor(() => expect(panel().querySelector(".toolbar-subtitle")).toHaveTextContent(/^Open · 1 folder · 23 files$/));
+    await waitFor(() => expect(panel().querySelector(".collection-head-count")).toHaveTextContent(/^1 folder · 23 files$/));
     expect(within(members).queryByText("Ungrouped")).toBeNull();
     expect(within(members).getByText("Plans")).toBeInTheDocument();
   });
@@ -516,7 +487,7 @@ describe("Collection detail", () => {
         body: changeOf({ ...SAUNA, publish: { ongoing: false }, ongoing_rel: null }, { batch: batch(CLOSE_PLAN) }),
       },
     });
-    await user.click((await within(panel()).findAllByRole("button", { name: "Show in Finder" }))[0]); // the toolbar's
+    await user.click(await within(panel()).findByRole("button", { name: "Show folder" }));
     expect(await within(panel()).findByText(`${ONG}/Sauna`)).toBeInTheDocument(); // the Finder hint
     await user.click(within(panel()).getByRole("button", { name: "More actions" }));
     const toggle = within(screen.getByRole("menu")).getByRole("menuitemcheckbox", { name: "Show in ##. Ongoing" });
@@ -717,7 +688,7 @@ describe("Collection groups, summary and attention", () => {
       },
     });
     await within(panel()).findByRole("treeitem", { name: "Quotes" });
-    const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
+    const add = () => user.click(within(panel().querySelector<HTMLElement>(".section-head")!).getByRole("button", { name: "New group" }));
     await add();
     await waitFor(() => expect(posts(calls, "/api/collections/7/groups")).toHaveLength(1));
     expect(await within(panel()).findByRole("textbox", { name: "Group name" })).toHaveFocus();
@@ -750,7 +721,7 @@ describe("Collection groups, summary and attention", () => {
       },
     });
     await within(panel()).findByRole("treeitem", { name: "Quotes" });
-    const add = () => user.click(within(panel().querySelector(".toolbar-actions") as HTMLElement).getByRole("button", { name: "New group" }));
+    const add = () => user.click(within(panel().querySelector<HTMLElement>(".section-head")!).getByRole("button", { name: "New group" }));
     await add();
     const input = await within(panel()).findByRole("textbox", { name: "Group name" });
     await user.clear(input);
@@ -896,9 +867,10 @@ describe("Collection groups, summary and attention", () => {
     // an ordinary collection (Remove from the collection), drawn with GROUPED's tree
     const { user } = grouped({ "GET /api/collections/7": { body: { ...GROUPED, kind: null } }, "GET /api/collections/7/attention": { body: attention } });
     const strip = await within(panel()).findByRole("region", { name: "Needs attention" });
-    const bill = await within(strip).findByRole("button", { name: /To pay: Heat⟨U\+202E⟩ bill/ });
-    expect(bill.querySelector(".tag")).toHaveClass("tag-red");
-    expect(within(strip).getByRole("button", { name: /In inbox: quote\.pdf/ })).toBeInTheDocument();
+    const bill = await within(strip).findByRole("button", { name: "Heat⟨U+202E⟩ bill" });
+    expect(bill.parentElement!.querySelector(".tag")).toHaveClass("tag-red");
+    expect(bill.parentElement).toHaveTextContent("To pay");
+    expect(within(strip).getByRole("button", { name: "quote.pdf" }).parentElement).toHaveTextContent("In inbox");
     // the rows carry the same tags
     const row = within(tree()).getByText("old⟨U+202E⟩.pdf").closest("li")!;
     expect(within(row).getByText(/To pay/)).toHaveClass("tag-red");
@@ -924,13 +896,13 @@ describe("Collection groups, summary and attention", () => {
         }),
       }),
     });
-    const summary = await within(panel()).findByRole("textbox", { name: "Summary" });
+    await user.click(await within(panel()).findByRole("button", { name: "The sauna build" }));
+    const summary = within(panel()).getByRole("textbox", { name: "Summary" });
     expect(summary).toHaveValue("The sauna build");
     await user.type(summary, ", done by May");
     await user.tab();
     await waitFor(() => expect(patches(calls, "/api/collections/7/summary")).toHaveLength(1));
     expect(patches(calls, "/api/collections/7/summary")[0].body).toEqual({ summary: "The sauna build, done by May" });
-    expect(await within(panel()).findByText("Saved")).toBeInTheDocument();
 
     const quotes = within(tree()).getByRole("treeitem", { name: "Quotes" });
     await user.click(within(quotes).getByText("Two offers⟨U+202E⟩"));
@@ -1009,7 +981,8 @@ describe("Collection groups, summary and attention", () => {
   it("a summary auto-save does not disable the Group select", async () => {
     const saving = deferred<{ body: unknown }>();
     const { calls, user } = grouped({ "PATCH /api/collections/7/summary": () => saving.promise });
-    const summary = await within(panel()).findByRole("textbox", { name: "Summary" });
+    await user.click(await within(panel()).findByRole("button", { name: "The sauna build" }));
+    const summary = within(panel()).getByRole("textbox", { name: "Summary" });
     await user.type(summary, "!");
     await user.tab();
     await waitFor(() => expect(patches(calls, "/api/collections/7/summary")).toHaveLength(1));
@@ -1090,7 +1063,7 @@ describe("Collection AI summaries", () => {
     await waitFor(() =>
       expect(within(panel()).queryByRole("region", { name: "AI summary of the collection" })).not.toBeInTheDocument(),
     );
-    expect(await within(panel()).findByRole("textbox", { name: "Summary" })).toHaveValue(ANSWER.summary);
+    expect(await within(panel()).findByRole("button", { name: ANSWER.summary })).toBeInTheDocument();
 
     // the empty group: Use saves the line
     await user.click(within(within(plans).getByRole("region", { name: "AI summary of Plans" })).getByRole("button", { name: "Use" }));
@@ -1186,7 +1159,7 @@ describe("Parent collections", () => {
   it("a collection hidden with its parent says so in the Finder popover instead of advice", async () => {
     const status = `Not shown: its parent collection 'Houses' is not shown in ${ONG}`;
     const { user } = sauna({ "GET /api/collections/7": { body: { ...IN_HOUSES, ongoing_rel: null, ongoing_status: status } } });
-    await user.click((await within(panel()).findAllByRole("button", { name: "Show in Finder" }))[0]); // the toolbar's
+    await user.click(await within(panel()).findByRole("button", { name: "Show folder" }));
     const popover = within(panel()).getByRole("group", { name: "Show in Finder" });
     expect(popover).toHaveTextContent(status);
     expect(popover).not.toHaveTextContent("Turn on");
@@ -1233,8 +1206,9 @@ describe("Parent collections", () => {
     cleanup();
     renderCollections("/collections/9", { "GET /api/collections": lists, "GET /api/collections/9": { body: DECK } });
     await within(panel()).findByRole("heading", { name: "Deck" });
-    const subtitle = await within(panel()).findByText(/^Open · 1 folder · 2 files/); // once the list has loaded
-    const own = subtitle.textContent!.replace(/^Open · /, "");
+    const count = panel().querySelector(".collection-head-count")!;
+    await waitFor(() => expect(count).toHaveTextContent(/^1 folder · 2 files/)); // once the list has loaded
+    const own = count.textContent!;
     expect(own).toBe("1 folder · 2 files");
     expect(onParent.split(" · ").slice(0, 2).join(" · ")).toBe(own);
   });
@@ -1422,7 +1396,7 @@ describe("Trash on collection members", () => {
   });
 });
 
-describe("The header's Browse file actions on a collection member", () => {
+describe("The file's icon rows on a collection member", () => {
   const STATUS = { special_folders: { inbox: "##. Organize", ongoing: "##. Ongoing", important: "##. Important", quarantine: "##. To Delete" } };
   const moved = (src: string, dst: string, id = "f1") => ({ kind: "move", src, dst, drive_id: id, note: null });
   const applied = (op: ReturnType<typeof moved>, folder: string) => ({
@@ -1436,15 +1410,19 @@ describe("The header's Browse file actions on a collection member", () => {
     await within(panel()).findByRole("tree", { name: "Members" });
     await waitFor(() => expect(names()).toContain("Back to inbox"));
     expect(names()).toEqual([
-      "Put in tray",
-      "Remove quote.pdf from the collection",
-      "Back to inbox",
-      "Move to…",
+      "Open",
+      "Quick Look",
+      "Show in Finder",
+      "Show in folder",
+      "Relatives",
+      "Ask AI",
       "From…",
       "For…",
-      "Ask AI",
+      "Put in tray",
       "Star",
       "Mark Important",
+      "Back to inbox",
+      "Remove quote.pdf from the collection",
       "Move to To Delete",
     ]);
   });
@@ -1488,9 +1466,12 @@ describe("The header's Browse file actions on a collection member", () => {
       "POST /api/browse/move": { body: applied(op, "10. Financial") },
     });
     await ready();
-    await user.click(within(bar()).getByRole("button", { name: "Move to…" }));
+    // the folder in the panel's header moves the file (the icon rows have no Move to…)
+    await user.click(within(within(panel()).getByRole("complementary", { name: "Selected file" })).getByRole("button", { name: "Move file to…" }));
     const sheet = await screen.findByRole("dialog", { name: "Move 1 file to…" });
-    await user.type(within(sheet).getByLabelText("Folder"), "10. Financial");
+    const field = within(sheet).getByRole("combobox");
+    await user.clear(field);
+    await user.type(field, "10. Financial");
     await user.click(within(sheet).getByRole("button", { name: "Preview move" }));
     const dialog = await screen.findByRole("dialog", { name: "Move 1 file to 10. Financial?" });
     expect(posts(calls, "/api/browse/move/preview")[0].body).toEqual({ drive_ids: ["f1"], folder: "10. Financial" });
@@ -1529,7 +1510,7 @@ describe("The header's Browse file actions on a collection member", () => {
     });
     await ready();
     await user.click(within(tree()).getByText("x.pdf"));
-    for (const name of ["Move to…", "Back to inbox", "From…", "For…"]) {
+    for (const name of ["Back to inbox", "From…", "For…"]) {
       const b = within(bar()).getByRole("button", { name });
       expect(b).toBeDisabled();
       expect(b.parentElement).toHaveAttribute("data-tip", expect.stringMatching(/To Delete|Marked for deletion/));
@@ -1540,13 +1521,11 @@ describe("The header's Browse file actions on a collection member", () => {
     expect(posts(calls, "/api/restore")[0].body).toEqual({ drive_ids: ["f3"], to: "original", dry_run: true });
   });
 
-  it("a folder member and a missing file say why the move actions are off", async () => {
+  it("a folder member has Move off, and a missing file says why its move actions are off", async () => {
     const { user } = renderCollections("/collections/7", { "GET /api/status": { body: STATUS } });
     await ready();
     await user.click(within(tree()).getByText("Plans"));
-    const move = within(bar()).getByRole("button", { name: "Move to…" });
-    expect(move).toBeDisabled();
-    expect(move.parentElement).toHaveAttribute("data-tip", "Folders are moved from Browse");
+    expect(within(within(panel()).getByRole("complementary", { name: "Selected file" })).getByRole("button", { name: "Move file to…" })).toBeDisabled();
     await user.click(within(tree()).getByText("old⟨U+202E⟩.pdf"));
     const from = within(bar()).getByRole("button", { name: "From…" });
     expect(from.parentElement).toHaveAttribute("data-tip", "The file is missing");

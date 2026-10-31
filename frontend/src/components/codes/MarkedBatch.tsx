@@ -86,7 +86,7 @@ type Props = {
   /** Show this file in the Inbox form (closes the panel). */
   onOpen: (driveId: string) => void;
   onClose: () => void;
-  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  /** The "Inbox N" button (the list is folded in a narrow window). */
   lead?: ReactNode;
 };
 

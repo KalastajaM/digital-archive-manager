@@ -26,7 +26,6 @@ import { Budget } from "../components/ai/SendSheet";
 import { TASK_LABEL, useAIState } from "../components/ai/useAI";
 import { JournalList } from "../components/JournalList";
 import { RecoveryPanel } from "../components/Recovery";
-import { useStyle } from "../appearance";
 import { useBlockToastActions } from "../components/Toasts";
 import { useUndoConfirm } from "../components/UndoConfirm";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -225,8 +224,7 @@ function CollectionLink({ id, children }: { id: number; children: ReactNode }) {
 }
 
 /** Where a batch came from, in words; the app is the default and says nothing. */
-const ORIGIN_WORD: Record<string, string> = { cli: "command line" };
-const NEW_ORIGIN_WORD: Record<string, string> = { ui: "You", undo: "You", cli: "CLI", workflow: "Auto" };
+const ORIGIN_WORD: Record<string, string> = { ui: "You", undo: "You", cli: "CLI", workflow: "Auto" };
 
 /** Batches with more ops than this show them behind a "Show details" fold. */
 export const OPS_OPEN_MAX = 3;
@@ -261,9 +259,8 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
   const sync = b.origin === "workflow";
   const [state, tone] = batchState(b);
   const collection = sync ? syncCollection(b.ops, collections, roots) : undefined;
-  const [look] = useStyle();
-  // New names who made every change (a chip); Classic only the command line
-  const origin = look === "new" ? NEW_ORIGIN_WORD[b.origin] : ORIGIN_WORD[b.origin];
+  // names who made every change (a chip)
+  const origin = ORIGIN_WORD[b.origin];
   const at = new Date(b.created * 1000);
   return (
     <article className="batch" aria-label={`Batch ${b.batch_id}`}>
@@ -314,8 +311,8 @@ function Batch({ b, title, collections, roots, words, undoBusy, onUndo, expanded
                   "change the collection to undo it"
                 )}
               </span>
-            ) : look === "new" && (b.undone || b.is_undo || interrupted) ? (
-              // New: a change that cannot be undone offers its details instead of a dead Undo
+            ) : (b.undone || b.is_undo || interrupted) ? (
+              // a change that cannot be undone offers its details instead of a dead Undo
               <button
                 type="button"
                 className="batch-details"
@@ -633,9 +630,7 @@ function readExpandedDefault(): boolean {
 
 export default function Activity() {
   const [view, setView] = useState<View>("changes");
-  const [look] = useStyle();
-  const isNew = look === "new";
-  // New, in a narrow screen: the filters fold behind a "Filters N" button
+  // in a narrow screen: the filters fold behind a "Filters N" button
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const urlQ = params.get("q") ?? params.get("file") ?? "";
@@ -763,24 +758,16 @@ export default function Activity() {
       id="activity-q"
       type="search"
       placeholder="Search changes and files"
-      aria-label={isNew ? "Search the changes" : undefined}
+      aria-label="Search the changes"
       value={text}
       spellCheck={false}
       onChange={(e) => setText(e.target.value)}
     />
   );
-  const searchBox = (
-    <div className="search">
-      <label htmlFor="activity-q" className="visually-hidden">
-        Search the changes
-      </label>
-      {searchInput}
-    </div>
-  );
   const toggleAllButton = (
     <button
       type="button"
-      className={isNew ? "quiet flt" : undefined}
+      className="quiet flt"
       disabled={searching}
       data-tip={searching ? "Search results are shown open" : undefined}
       onClick={toggleAll}
@@ -788,7 +775,7 @@ export default function Activity() {
       {expandAll || searching ? "Collapse all" : "Expand all"}
     </button>
   );
-  const menuClass = isNew ? "flt" : undefined;
+  const menuClass = "flt";
   return (
     <div className="activity" data-filters={filtersOpen ? "open" : undefined}>
       <Toolbar
@@ -796,55 +783,47 @@ export default function Activity() {
         title="Activity"
         subtitle={
           view === "changes" && count > 0
-            ? isNew
-              ? `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}, undone one at a time`
-              : `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}`
+            ? `${plural(count, "change", "changes")}${activity.hasNextPage ? " so far" : ""}, undone one at a time`
             : undefined
         }
         actions={
           <>
-            {!isNew && view === "changes" && count > 0 && toggleAllButton}
             <Segmented<View>
               ariaLabel="Show"
               value={view}
               onChange={setView}
               options={[
                 { value: "changes", label: "Changes" },
-                { value: "ai", label: isNew ? "AI calls" : "AI", ariaLabel: isNew ? "AI calls" : undefined },
+                { value: "ai", label: "AI calls", ariaLabel: "AI calls" },
               ]}
             />
           </>
         }
-        search={!isNew && view === "changes" ? searchBox : undefined}
       />
       {view === "changes" && (
         <div className="activity-filters" role="group" aria-label="Filters">
-          {isNew && (
-            <label className="activity-search">
-              <Search size={14} aria-hidden="true" />
-              {searchInput}
-            </label>
-          )}
+          <label className="activity-search">
+            <Search size={14} aria-hidden="true" />
+            {searchInput}
+          </label>
           <FilterMenu className={menuClass} label="Kind of change" value={filters.kind} options={KIND_OPTIONS} onChange={(v) => setParam({ kind: v })} />
           <FilterMenu className={menuClass} label="Status" value={filters.status} options={STATUS_OPTIONS} onChange={(v) => setParam({ status: v })} />
           <FilterMenu className={menuClass} label="Made by" value={filters.origin} options={ORIGIN_OPTIONS} onChange={(v) => setParam({ origin: v })} />
           <FilterMenu className={menuClass} label="When" value={filters.when} options={WHEN_OPTIONS} onChange={(v) => setParam({ when: v })} />
           {filtered && (
-            <button type="button" className={isNew ? "activity-clear flt" : "activity-clear"} onClick={clearFilters}>
+            <button type="button" className="activity-clear flt" onClick={clearFilters}>
               Clear filters
             </button>
           )}
-          {isNew && toggleAllButton}
-          {isNew && (
-            <button
-              type="button"
-              className="filters-toggle"
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              Filters <span className="mono">{filterCount}</span>
-            </button>
-          )}
+          {toggleAllButton}
+          <button
+            type="button"
+            className="filters-toggle"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            Filters <span className="mono">{filterCount}</span>
+          </button>
         </div>
       )}
       <div className="activity-body">

@@ -1,5 +1,5 @@
 /** Browse: the select-all checkbox, ⌘A, the "N selected" count and the batch ★ / !. */
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -120,11 +120,11 @@ describe("Star and Important for the checked files", () => {
     expect(posts(calls, "/api/marks/important")[0].body).toEqual({ drive_ids: ["f1", "f2"] });
   });
 
-  it("are in the header for one file too (not in the preview's toolbar), off with nothing selected", async () => {
+  it("are in the file panel's icon rows for one file too (not in the preview's toolbar), and not there with nothing selected", async () => {
     const { user } = setup(FILES);
     await screen.findByText("a.pdf");
-    const header = () => screen.getByRole("toolbar", { name: "Browse file actions" });
-    expect(within(header()).getByRole("button", { name: "Star" })).toBeDisabled();
+    const header = () => document.querySelector(".file-actions-icons") as HTMLElement;
+    expect(header()).toBeNull();
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
     expect(within(header()).getByRole("button", { name: "Star" })).toBeEnabled();
     expect(within(header()).getByRole("button", { name: "Mark Important" })).toBeEnabled();
@@ -134,39 +134,44 @@ describe("Star and Important for the checked files", () => {
   });
 });
 
-describe("The header's file actions", () => {
-  const bar = () => within(screen.getByRole("toolbar", { name: "Browse file actions" }));
+describe("The file panel's icon rows", () => {
+  const bar = () => within(document.querySelector(".file-actions-icons") as HTMLElement);
   const names = () => bar().getAllByRole("button").map((b) => b.getAttribute("aria-label"));
 
-  it("are one group in the shared order, over the file pane; the preview's toolbar keeps only viewing tools", async () => {
+  it("are in the shared order, over the preview; the preview's toolbar keeps only viewing tools", async () => {
     const { user } = setup(FILES);
     await screen.findByText("a.pdf");
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
     expect(names()).toEqual([
-      "Put in tray",
-      "Back to inbox",
-      "Move to…",
+      "Open",
+      "Quick Look",
+      "Show in Finder",
+      "Relatives",
+      "Ask AI",
       "From…",
       "For…",
-      "Ask AI",
+      "Put in tray",
       "Star",
       "Mark Important",
+      "Back to inbox",
       "Move to To Delete",
     ]);
-    const preview = screen.getByRole("region", { name: "Preview" });
+    const preview = screen.getByRole("region", { name: "Preview" }).querySelector('[data-block="preview"]') as HTMLElement;
     for (const name of ["Star", "Mark Important", "Ask AI", "Put in tray", "Back to inbox"]) {
       expect(within(preview).queryByRole("button", { name })).toBeNull();
     }
   });
 
-  it("with several files checked Ask AI is off and says to pick one", async () => {
+  it("with several files checked there is no Ask AI icon, and its menu entry is off and says to pick one", async () => {
     const { user } = setup(FILES);
     await screen.findByText("a.pdf");
     await user.click(screen.getByRole("checkbox", { name: "Select a.pdf" }));
     await user.click(screen.getByRole("checkbox", { name: "Select b.pdf" }));
-    const ask = bar().getByRole("button", { name: "Ask AI" });
+    expect(bar().queryByRole("button", { name: "Ask AI" })).toBeNull();
+    fireEvent.contextMenu(screen.getByText("a.pdf", { selector: ".entry-name" }));
+    const ask = await screen.findByRole("menuitem", { name: "Ask AI" });
     expect(ask).toBeDisabled();
-    expect(ask.parentElement).toHaveAttribute("data-tip", "Select one file to ask AI");
+    expect(ask).toHaveAccessibleDescription("Select one file to ask AI");
   });
 });
 
@@ -179,7 +184,7 @@ describe("From and For for the checked files", () => {
       "PUT /api/assignments": { body: [] },
     });
     await screen.findByText("a.pdf");
-    expect(screen.getByRole("button", { name: "From…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "From…" })).toBeNull(); // nothing selected: no file actions
     await user.click(allBox());
     await user.click(screen.getByRole("button", { name: "From…" }));
     const sheet = await screen.findByRole("dialog", { name: "From (2 documents)" });

@@ -72,7 +72,7 @@ describe("Files in To Delete are read-only", () => {
     const { user } = setup();
     await user.click(await screen.findByText("a.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    const bar = within(screen.getByRole("toolbar", { name: "Browse file actions" }));
+    const bar = within(preview.querySelector(".file-actions-icons") as HTMLElement);
     expect(bar.getByRole("button", { name: "Star" })).toBeDisabled();
     expect(bar.getByRole("button", { name: "Mark Important" })).toBeDisabled();
     expect(bar.getByRole("button", { name: "Star" }).parentElement).toHaveAttribute("data-tip", TIP);
@@ -81,7 +81,7 @@ describe("Files in To Delete are read-only", () => {
     expect(tray).toBeDisabled();
     expect(tray.parentElement).toHaveAttribute("data-tip", TIP);
     expect(bar.getByRole("button", { name: "Back to inbox" })).toBeDisabled();
-    expect(await within(preview).findByRole("button", { name: "Write a summary" })).toBeDisabled();
+    expect(await within(preview).findByText("No summary yet.")).toHaveAttribute("data-tip", TIP); // read-only: not a field to click into
     expect(within(preview).getByRole("textbox", { name: "Note on this file" })).toBeDisabled();
     expect(within(preview).getByRole("combobox", { name: /Add a tag/ })).toBeDisabled();
   });
@@ -109,7 +109,8 @@ describe("Restore", () => {
     });
     await user.click(await screen.findByText("a.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    await user.click(within(preview).getByRole("button", { name: "Restore to where it was" }));
+    await user.click(within(preview).getByRole("button", { name: "Restore from To Delete" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restore to where it was" }));
     const dialog = await screen.findByRole("dialog", { name: "Restore from To Delete?" });
     expect(posts(calls, "/api/restore").map((c) => c.body)).toEqual([{ drive_ids: ["f1"], to: "original", dry_run: true }]);
     expect(dialog).toHaveTextContent("New folder");
@@ -141,8 +142,8 @@ describe("Restore", () => {
 
   it("a folder marked for deletion is restored from its context menu, or from its panel", async () => {
     const { calls, user } = setup();
-    await screen.findByText("a.pdf");
-    fireEvent.contextMenu(screen.getByText("Old"));
+    await within(await screen.findByRole("list", { name: "Folder contents" })).findByText("a.pdf");
+    fireEvent.contextMenu(within(screen.getByRole("list", { name: "Folder contents" })).getByText("Old"));
     await user.click(await screen.findByRole("menuitem", { name: "Restore to where it was" }));
     const dialog = await screen.findByRole("dialog", { name: "Restore from To Delete?" });
     expect(posts(calls, "/api/restore")[0].body).toEqual({ drive_ids: ["d1"], to: "original", dry_run: true });
@@ -158,7 +159,8 @@ describe("Restore", () => {
     const { calls, user } = setup();
     await user.click(await screen.findByText("a.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    await user.click(within(preview).getByRole("button", { name: "Restore to Inbox" }));
+    await user.click(within(preview).getByRole("button", { name: "Restore from To Delete" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restore to Inbox" }));
     const dialog = await screen.findByRole("dialog", { name: "Restore from To Delete?" });
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(posts(calls, "/api/restore")).toHaveLength(1); // the dry run only
@@ -170,7 +172,8 @@ describe("Restore", () => {
     });
     await user.click(await screen.findByText("a.pdf"));
     const preview = await screen.findByRole("region", { name: "Preview" });
-    await user.click(within(preview).getByRole("button", { name: "Restore to where it was" }));
+    await user.click(within(preview).getByRole("button", { name: "Restore from To Delete" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restore to where it was" }));
     expect(await screen.findByText(/Not restored: .*stood at the top of the archive/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Restore from To Delete?" })).not.toBeInTheDocument();
     expect(posts(calls, "/api/restore")).toHaveLength(1);

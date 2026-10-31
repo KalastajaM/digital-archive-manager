@@ -72,11 +72,9 @@ const row = (name: string) => inList(name).closest("li") as HTMLElement;
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
 describe("A file row's right-click menu", () => {

@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -9,11 +9,9 @@ import { CopyButton } from "../components/CopyButton";
 import { RelativeDate, useLocalClock, useLocalToday } from "../components/RelativeDate";
 import { UrgencyTag, urgency } from "../components/UrgencyTag";
 import { formatMoney, groupIban } from "../format";
-import { setDragFiles } from "../dnd";
-import { CARD_DRAG_TYPE, LAYOUT_KEY } from "../components/useCardLayout";
-import { type Call, dataTransfer, mockFetch, quarantineRoute, renderWithProviders } from "../test-utils";
+import { type Call, mockFetch, quarantineRoute, renderWithProviders } from "../test-utils";
 import { longDate } from "../format";
-import Today, { greeting } from "./Today";
+import Today from "./Today";
 
 const DAY = "2026-10-19";
 const DAY_S = Date.parse(`${DAY}T12:00:00`) / 1000;
@@ -44,15 +42,6 @@ const TO_ACTION: TrayDef = {
   done: { label: "Done", fields: {} },
 };
 const TRAYS = { trays: [TO_PAY, TO_ACTION], errors: [] };
-// a tray whose done action needs a value the user must give (no default)
-const ASKS = {
-  trays: [
-    { ...TO_PAY, done: { label: "Mark paid", fields: { paid_on: { type: "date", required: true, copy: false, default: null } } } },
-    TO_ACTION,
-  ],
-  errors: [],
-};
-
 function item(id: number, overrides: Partial<Item> = {}): Item {
   return {
     id,
@@ -191,7 +180,6 @@ function renderToday(routes: Parameters<typeof mockFetch>[0] = {}) {
 afterEach(() => localStorage.clear());
 
 const row = (title: string) => screen.getByRole("article", { name: title });
-const card = (name: string) => screen.getByRole("region", { name });
 const posts = (calls: Call[], url: string) => calls.filter((c) => c.method === "POST" && c.url === url);
 const toasts = () => document.querySelector<HTMLElement>(".toasts")!;
 
@@ -202,13 +190,7 @@ describe("formatting", () => {
     expect(groupIban("FI2112345600000785")).toBe("FI21 1234 5600 0007 85");
   });
 
-  it("greets by the hour and writes the long date", () => {
-    expect(greeting(5)).toBe("Good morning");
-    expect(greeting(11)).toBe("Good morning");
-    expect(greeting(12)).toBe("Good afternoon");
-    expect(greeting(17)).toBe("Good afternoon");
-    expect(greeting(18)).toBe("Good evening");
-    expect(greeting(2)).toBe("Good evening");
+  it("writes the long date", () => {
     expect(longDate("2026-10-20")).toBe("Tuesday 20 October");
   });
 });
@@ -283,7 +265,7 @@ describe("AgeBar", () => {
 describe("useLocalToday", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("the clock's hour moves on too (for the greeting)", () => {
+  it("the clock's hour moves on too", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 19, 11, 59, 30));
     const { result } = renderHook(() => useLocalClock());
@@ -330,251 +312,10 @@ describe("CopyButton", () => {
 });
 
 describe("Today", () => {
-  it("greets with the date and says how much needs attention", async () => {
-    renderToday();
-    expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeVisible();
-    expect(screen.getByText("Monday 19 October")).toBeInTheDocument();
-    // the hero line counts what waits: the inbox, what is due soon, undated items, overdue
-    expect(screen.getByText("35 to file · 2 items due soon · 1 item without a due date · 1 overdue")).toBeInTheDocument();
-  });
-
-  it("the hero line says bills when everything due soon is a bill, and nothing overdue when so", async () => {
-    renderToday({
-      "GET /api/today": {
-        body: { ...TODAY, attention: [attention(SOON, "soon")], inbox_stats: { ...TODAY.inbox_stats, count: 6 } },
-      },
-    });
-    expect(await screen.findByText("6 to file · 1 bill due soon · nothing overdue")).toBeInTheDocument();
-  });
-
-  it("lists what needs attention in its tray's card, with urgency tags, key fields and badges", async () => {
-    renderToday();
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(card("To pay")).toContainElement(bill);
-    expect(bill).toHaveClass("attention-overdue");
-    expect(within(bill).getByText("4 days overdue")).toHaveClass("tag-red");
-    expect(within(bill).getByText("4 days overdue")).toHaveAttribute("title", "Overdue · 15.10.2026");
-    expect(bill).toHaveTextContent("Northpower⟨U+202E⟩Oy");
-    expect(bill).toHaveTextContent("84,20 €");
-    expect(bill).toHaveTextContent("FI21 1234 5600 0007 85");
-
-    const action = row("Water pipe inspection");
-    expect(card("To action")).toContainElement(action);
-    expect(action).toHaveClass("attention-today");
-    expect(within(action).getByText("today")).toHaveClass("tag-orange");
-    expect(action).toHaveTextContent("Note: fill⟨U+202E⟩buckets the evening before");
-    expect(bill).not.toHaveTextContent("Note:");
-    expect(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" })).toBeInTheDocument();
-    expect(within(action).queryByRole("button", { name: "Done" })).not.toBeInTheDocument();
-
-    const soon = row("Kotihoito lasku");
-    expect(soon).toHaveClass("attention-soon");
-    expect(within(soon).getByText("in 3 days")).toHaveClass("tag-orange");
-    expect(within(soon).getByText("file missing")).toBeInTheDocument();
-
-    const undated = row("Bill⟨U+202E⟩gpj.exe");
-    expect(within(undated).queryByText(/needs a/)).not.toBeInTheDocument();
-    expect(within(undated).getByText(/To Delete/)).toBeInTheDocument();
-  });
-
-  it("To pay shows the total and the open bills from the payload by date, later ones grey without actions", async () => {
-    const { calls } = renderToday();
-    const pay = await screen.findByRole("region", { name: "To pay" });
-    expect(pay).toHaveTextContent("412,90 €");
-    expect(pay).toHaveTextContent("4 open · 1 overdue");
-    await within(pay).findByRole("article", { name: "Water" });
-    expect(within(pay).getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual([
-      "Northpower sähkö",
-      "Kotihoito lasku",
-      "Water",
-      "Bill⟨U+202E⟩gpj.exe",
-    ]);
-    const later = row("Water");
-    expect(within(later).getByText("12 Nov")).toHaveClass("tag-grey");
-    expect(later).toHaveTextContent("HSY");
-    expect(later).toHaveTextContent("80,00 €");
-    expect(within(later).queryByRole("button")).not.toBeInTheDocument();
-    expect(within(pay).getByRole("link", { name: "Show all in To pay" })).toHaveAttribute("href", "/trays/to-pay");
-    expect(within(pay).getByRole("link", { name: "Water" })).toHaveAttribute("href", "/trays/to-pay?item=5");
-    // the rows come with /api/today: no request per tray
-    expect(calls.filter((c) => c.url.includes("/items"))).toEqual([]);
-  });
-
-  it("says how many open items the card does not show", async () => {
-    renderToday({
-      "GET /api/today": {
-        body: { ...TODAY, overview: { ...TODAY.overview, trays: [{ ...TODAY.overview.trays[0], open: 11 }] } },
-      },
-    });
-    const pay = await screen.findByRole("region", { name: "To pay" });
-    expect(within(pay).getByRole("link", { name: "7 more items" })).toHaveAttribute("href", "/trays/to-pay");
-  });
-
-  it("attention items missing from the open items still show", async () => {
-    renderToday({ "GET /api/today": { body: { ...TODAY, open_items: [] } } });
-    const pay = await screen.findByRole("region", { name: "To pay" });
-    await within(pay).findByRole("article", { name: "Northpower sähkö" });
-    expect(within(pay).getAllByRole("article")).toHaveLength(3);
-    expect(within(pay).queryByRole("article", { name: "Water" })).not.toBeInTheDocument();
-  });
-
-  it("To read shows the count, how long the oldest waited and how many wait long", async () => {
-    renderToday();
-    const read = await screen.findByRole("region", { name: "To⟨U+200B⟩read" });
-    expect(read).toHaveTextContent("6");
-    expect(read).toHaveTextContent("2 waiting long");
-    expect(await within(read).findByText("oldest 3 weeks")).toBeInTheDocument();
-    expect(within(read).getByRole("article", { name: "Pension statement 2026" })).toHaveTextContent("3 weeks");
-    expect(within(read).getByRole("link", { name: "Show all in To⟨U+200B⟩read" })).toHaveAttribute(
-      "href",
-      "/trays/to-read",
-    );
-  });
-
-  it("shows copy buttons only for copy fields that have a value", async () => {
-    renderToday();
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    const names = within(bill)
-      .getAllByRole("button")
-      .map((b) => b.textContent);
-    expect(names).toEqual(["Copy amount", "Copy IBAN", "Copy reference"]);
-    // the action has no copy fields; the soon bill has only an amount
-    expect(within(row("Water pipe inspection")).queryByRole("button", { name: /^Copy/ })).not.toBeInTheDocument();
-    expect(within(row("Kotihoito lasku")).getAllByRole("button", { name: /^Copy/ })).toHaveLength(1);
-  });
-
-  it("the IBAN copy button writes the compact IBAN and shows Copied", async () => {
-    const { user } = renderToday();
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("button", { name: "Copy IBAN" }));
-    expect(await navigator.clipboard.readText()).toBe("FI2112345600000785");
-    expect(within(bill).getByRole("status")).toHaveTextContent("Copied");
-  });
-
-  it("ticking a bill completes it at once with the done defaults (paid on = today); Undo reopens", async () => {
-    let done = false;
-    const { calls, user } = renderToday({
-      "GET /api/today": () => ({
-        body: done
-          ? {
-              ...TODAY,
-              attention: TODAY.attention.slice(1),
-              open_items: [{ tray_id: "to-pay", items: [SOON, LATER, UNDATED] }, ...TODAY.open_items.slice(1)],
-            }
-          : TODAY,
-      }),
-      "POST /api/items/1/done": () => {
-        done = true;
-        return { body: { ...BILL, state: "done" } };
-      },
-      "POST /api/items/1/reopen": { body: BILL },
-    });
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
-    await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
-    expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
-    await waitFor(() => expect(screen.queryByRole("article", { name: "Northpower sähkö" })).not.toBeInTheDocument());
-
-    expect(toasts()).toHaveTextContent(/Marked paid: Northpower sähkö/);
-    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
-    await waitFor(() => expect(posts(calls, "/api/items/1/reopen")).toHaveLength(1));
-    expect(await within(toasts()).findByText("Reopened: Northpower sähkö")).toBeInTheDocument();
-  });
-
-  it("a done field that is required and has no default opens the small form", async () => {
-    const { calls, user } = renderToday({
-      "GET /api/trays": { body: ASKS },
-      "POST /api/items/1/done": { body: { ...BILL, state: "done" } },
-    });
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    const form = within(bill).getByRole("form", { name: "Mark paid" });
-    const paidOn = within(form).getByLabelText("Paid on");
-    expect(paidOn).toHaveFocus();
-    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
-    fireEvent.change(paidOn, { target: { value: DAY } });
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(posts(calls, "/api/items/1/done")).toHaveLength(1));
-    expect(posts(calls, "/api/items/1/done")[0].body).toEqual({ fields: { paid_on: DAY } });
-  });
-
-  it("a compact (later) row can be ticked off too", async () => {
-    const { calls, user } = renderToday({ "POST /api/items/5/done": { body: { ...LATER, state: "done" } } });
-    await screen.findByRole("article", { name: LATER.title });
-    const later = row(LATER.title);
-    expect(later).toHaveClass("today-row-compact");
-    await user.click(within(later).getByRole("checkbox", { name: `Mark ${LATER.title} paid` }));
-    await waitFor(() => expect(posts(calls, "/api/items/5/done")).toHaveLength(1));
-    expect(posts(calls, "/api/items/5/done")[0].body).toEqual({ fields: { paid_on: DAY } });
-  });
-
-  it("Esc closes the done form without posting; a tray without done fields completes at once, with Undo", async () => {
-    const { calls, user } = renderToday({
-      "GET /api/trays": { body: ASKS },
-      "POST /api/items/2/done": { body: { ...ACTION, state: "done" } },
-      "POST /api/items/2/reopen": { body: ACTION },
-    });
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    await user.keyboard("{Escape}");
-    expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
-    expect(posts(calls, "/api/items/1/done")).toHaveLength(0);
-
-    const action = row("Water pipe inspection");
-    await user.click(within(action).getByRole("checkbox", { name: "Mark Water pipe inspection done" }));
-    expect(within(action).queryByRole("form")).not.toBeInTheDocument();
-    await waitFor(() => expect(posts(calls, "/api/items/2/done")).toHaveLength(1));
-    expect(posts(calls, "/api/items/2/done")[0].body).toEqual({ fields: {} });
-    expect(await within(toasts()).findByText("Marked done: Water pipe inspection")).toBeInTheDocument();
-    await user.click(within(toasts()).getByRole("button", { name: "Undo" }));
-    await waitFor(() => expect(posts(calls, "/api/items/2/reopen")).toHaveLength(1));
-  });
-
-  it("Esc closes the done form even when the focus has left it", async () => {
-    const { user } = renderToday({ "GET /api/trays": { body: ASKS } });
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    await user.click(screen.getByRole("heading", { level: 1 }));
-    expect(within(bill).getByLabelText("Paid on")).not.toHaveFocus();
-    await user.keyboard("{Escape}");
-    expect(within(bill).queryByRole("form")).not.toBeInTheDocument();
-  });
-
   it("Done stays disabled when the tray settings cannot be loaded", async () => {
     renderToday({ "GET /api/trays": { status: 500, body: { error: "x" } } });
     expect(await screen.findByText(/Tray settings could not be loaded/)).toBeInTheDocument();
     expect(within(row("Northpower sähkö")).getByRole("checkbox", { name: /^Mark Northpower sähkö/ })).toBeDisabled();
-  });
-
-  it("a failed done keeps the form and shows the error", async () => {
-    const { user } = renderToday({
-      "GET /api/trays": { body: ASKS },
-      "POST /api/items/1/done": { status: 400, body: { error: "paid_on: expected a date" } },
-    });
-    const bill = await screen.findByRole("article", { name: "Northpower sähkö" });
-    await user.click(within(bill).getByRole("checkbox", { name: "Mark Northpower sähkö paid" }));
-    await user.keyboard("{Enter}");
-    expect(await within(bill).findByRole("alert")).toHaveTextContent("paid_on: expected a date");
-    expect(within(bill).getByRole("form", { name: "Mark paid" })).toBeInTheDocument();
-  });
-
-  it("the Inbox card shows the count, the oldest age, the age buckets and Start filing", async () => {
-    renderToday({
-      "GET /api/today": { body: { ...TODAY, inbox_stats: { ...TODAY.inbox_stats, overdue: 1 } } },
-    });
-    const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(inbox).toHaveTextContent("35 files");
-    expect(inbox).toHaveTextContent("oldest 2 weeks");
-    expect(within(inbox).getByText("1 overdue")).toHaveClass("tag-red");
-    expect(within(inbox).getByRole("img", { name: "10 this week, 5 last week, 20 older" })).toBeInTheDocument();
-    expect(
-      within(within(inbox).getByRole("list", { name: "Inbox age" }))
-        .getAllByRole("listitem")
-        .map((li) => li.textContent),
-    ).toEqual(["10 this week", "5 last week", "20 older"]);
-    expect(within(inbox).getByRole("link", { name: "Start filing" })).toHaveAttribute("href", "/inbox");
-    expect(within(inbox).queryByRole("list", { name: "Found in the inbox" })).not.toBeInTheDocument();
   });
 
   it("the Inbox card's File N marked opens the marked panel, and is hidden when none are marked", async () => {
@@ -727,13 +468,6 @@ describe("Today", () => {
     expect(collections).toHaveTextContent("still⟨U+200B⟩needed");
   });
 
-  it("links to the Ongoing conversion when entries are unmanaged; no banner otherwise", async () => {
-    renderToday({ "GET /api/today": { body: { ...TODAY, unmanaged_ongoing: 3 } } });
-    const banner = await screen.findByRole("region", { name: "Ongoing" });
-    expect(banner).toHaveTextContent("3 entries in ##. Ongoing are not in the app yet.");
-    expect(within(banner).getByRole("link", { name: "Convert" })).toHaveAttribute("href", "/ongoing");
-  });
-
   it("says once when the Ongoing sync keeps failing", async () => {
     renderToday({
       "GET /api/today": { body: { ...TODAY, ongoing_sync_failure: "stopped at symlink X\u200B: EIO" } },
@@ -741,12 +475,6 @@ describe("Today", () => {
     const notice = await screen.findByText(/Ongoing sync is failing/);
     expect(notice).toHaveTextContent("Ongoing sync is failing: stopped at symlink X⟨U+200B⟩: EIO");
     expect(screen.getAllByText(/Ongoing sync is failing/)).toHaveLength(1);
-  });
-
-  it("no Ongoing banner when everything is managed", async () => {
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(screen.queryByRole("link", { name: "Convert ##. Ongoing" })).not.toBeInTheDocument();
   });
 
   it("warns about reminder errors and skipped checks, notes skipped tray files", async () => {
@@ -776,299 +504,42 @@ describe("Today", () => {
     expect(reminders).toHaveTextContent("Last checked today at 08:30");
   });
 
-  it("says when nothing needs attention", async () => {
-    renderToday({
-      "GET /api/today": { body: { ...TODAY, attention: [], inbox_stats: { ...TODAY.inbox_stats, count: 0 } } },
-    });
-    expect(await screen.findByText("All clear")).toBeInTheDocument();
-  });
-
-  it("never says nothing needs attention while an overdue bill waits in the inbox", async () => {
-    renderToday({
-      "GET /api/today": { body: { ...TODAY, attention: [], inbox_stats: { ...TODAY.inbox_stats, overdue: 1 } } },
-    });
-    expect(await screen.findByText("35 to file · 1 overdue")).toBeInTheDocument();
-    expect(screen.queryByText("All clear")).not.toBeInTheDocument();
-  });
-
   it("shows a load error", async () => {
     renderToday({ "GET /api/today": { status: 500, body: { error: "boom" } } });
     expect(await screen.findByRole("alert")).toHaveTextContent(/Could not load Today/);
   });
 });
 
-describe("Today card layout", () => {
-  /** The cards' titles in page order: the first column, then the second. */
-  const order = () =>
-    [...document.querySelectorAll<HTMLElement>(".today-col > .today-slot")].map(
-      (slot) => slot.querySelector("h3")!.textContent,
-    );
-  // dealt out between the columns by the cards' rough heights (the first five, then the rest; Search tops the second column)
-  const DEFAULT_ORDER = ["Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Starred"];
-  const header = (name: string) => card(name).querySelector("header")!;
-  const foundN = (n: number) =>
-    Array.from({ length: n }, (_, i) => ({ ...FOUND, drive_id: `d${i}`, name: `scan ${i}.pdf` }));
-
-  it("each card folds from its chevron button down to its headline; the fold is kept after a remount", async () => {
-    const { user, view } = renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    const fold = within(card("To pay")).getByRole("button", { name: "Collapse To pay" });
-    expect(fold).toHaveAttribute("aria-expanded", "true");
-    await user.click(fold);
-    const pay = card("To pay");
-    expect(within(pay).getByRole("button", { name: "Expand To pay" })).toHaveAttribute("aria-expanded", "false");
-    expect(within(pay).queryByRole("article")).not.toBeInTheDocument();
-    expect(pay).toHaveTextContent(formatMoney("412.90"));
-    expect(pay).toHaveTextContent("4 open");
-    expect(pay).toHaveTextContent("1 overdue");
-
-    view.unmount();
-    renderToday();
-    const again = await screen.findByRole("region", { name: "To pay" });
-    expect(within(again).getByRole("button", { name: "Expand To pay" })).toBeInTheDocument();
-    expect(within(again).queryByRole("article")).not.toBeInTheDocument();
-    expect(screen.getByRole("article", { name: "Water pipe inspection" })).toBeInTheDocument(); // To action stays open
+describe("Collections to do", () => {
+  const collection = (id: number, name: string, files: number, open_checks: number, in_inbox: number) => ({
+    id,
+    name,
+    files,
+    open_checks,
+    note_excerpt: "",
+    in_inbox,
   });
 
-  it("folded, To action shows its next date and To read its count", async () => {
-    const { user } = renderToday();
+  it("lists only the collections with open checklist items or files still in the inbox", async () => {
+    const collections = [
+      collection(7, "Sauna", 23, 2, 0),
+      collection(8, "House sale", 4, 0, 1),
+      collection(9, "Riverside", 0, 0, 0),
+    ];
+    renderToday({ "GET /api/today": { body: { ...TODAY, overview: { ...TODAY.overview, collections } } } });
+    const region = await screen.findByRole("region", { name: "Collections to do" });
+    expect(within(region).getByRole("link", { name: "Sauna" })).toBeInTheDocument();
+    expect(within(region).getByRole("link", { name: "House sale" })).toBeInTheDocument();
+    expect(region).toHaveTextContent("4 files · 1 file in the inbox");
+    expect(within(region).queryByRole("link", { name: "Riverside" })).not.toBeInTheDocument();
+  });
+
+  it("no Collections section when none needs attention", async () => {
+    const collections = [collection(9, "Riverside", 0, 0, 0), collection(10, "Done deal", 12, 0, 0)];
+    renderToday({ "GET /api/today": { body: { ...TODAY, overview: { ...TODAY.overview, collections } } } });
     await screen.findByRole("article", { name: "Water pipe inspection" });
-    await user.click(screen.getByRole("button", { name: "Collapse To action" }));
-    await user.click(screen.getByRole("button", { name: "Collapse To⟨U+200B⟩read" }));
-    const action = card("To action");
-    expect(within(action).queryByRole("article")).not.toBeInTheDocument();
-    expect(action).toHaveTextContent("Next: Water pipe inspection");
-    expect(within(action).getByText("today")).toHaveClass("tag-orange");
-    const read = card("To⟨U+200B⟩read");
-    expect(within(read).queryByRole("article")).not.toBeInTheDocument();
-    expect(within(read).getByText("6")).toHaveClass("today-big");
-  });
-
-  it("the Inbox starts folded when more than 5 were found: the count and age bar, no Found list", async () => {
-    const { user } = renderToday({ "GET /api/today": { body: { ...TODAY, found: foundN(7) } } });
-    const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(inbox).toHaveTextContent("35 files");
-    expect(within(inbox).getByRole("img", { name: "10 this week, 5 last week, 20 older" })).toBeInTheDocument();
-    expect(within(inbox).queryByRole("list", { name: "Found in the inbox" })).not.toBeInTheDocument();
-    expect(within(inbox).queryByRole("button", { name: /^Put in/ })).not.toBeInTheDocument();
-
-    await user.click(within(inbox).getByRole("button", { name: "Expand Inbox" }));
-    const found = within(inbox).getByRole("list", { name: "Found in the inbox" });
-    expect(within(found).getAllByRole("listitem")).toHaveLength(5);
-    await user.click(within(inbox).getByRole("button", { name: "Show 2 more" }));
-    expect(within(found).getAllByRole("listitem")).toHaveLength(7);
-  });
-
-  it("the Inbox starts open with 5 found or fewer", async () => {
-    renderToday({ "GET /api/today": { body: { ...TODAY, found: foundN(5) } } });
-    const found = await screen.findByRole("list", { name: "Found in the inbox" });
-    expect(within(found).getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.queryByRole("button", { name: /^Show \d+ more$/ })).not.toBeInTheDocument();
-    expect(within(card("Inbox")).getByRole("button", { name: "Collapse Inbox" })).toBeInTheDocument();
-  });
-
-  const foldButton = (name: string) => header(name).querySelector<HTMLButtonElement>("button")!;
-  const altKey = (user: ReturnType<typeof userEvent.setup>, key: "ArrowUp" | "ArrowDown") =>
-    user.keyboard(`{Alt>}{${key}}{/Alt}`);
-
-  it("cards have no ⋯ menu; Option-Up and Option-Down on a header reorder them, announced and kept after a remount; Reset layout is on the page", async () => {
-    const { user, view } = renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(order()).toEqual(DEFAULT_ORDER);
-    expect(screen.queryByRole("button", { name: /^More for/ })).not.toBeInTheDocument();
-
-    foldButton("Inbox").focus();
-    await altKey(user, "ArrowUp"); // already first: nothing moves
-    expect(order()).toEqual(DEFAULT_ORDER);
-    await altKey(user, "ArrowDown");
-    expect(order()).toEqual(["To action", "Inbox", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Starred"]);
-    expect(document.body).toHaveTextContent("Inbox moved down");
-    // the focus stays with the moved card's header, so the keys can move it again
-    expect(document.activeElement).toBe(foldButton("Inbox"));
-
-    foldButton("Collections to do").focus();
-    await altKey(user, "ArrowUp");
-    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "Search", "To pay", "Starred"]);
-
-    view.unmount();
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(order()).toEqual(["To action", "Inbox", "Collections to do", "To⟨U+200B⟩read", "Reminders", "Search", "To pay", "Starred"]);
-
-    await user.click(screen.getByRole("button", { name: "Reset layout" }));
-    expect(order()).toEqual(DEFAULT_ORDER);
-    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
-  });
-
-  it("dragging a card by its header drops it before another card or at the end of a column", async () => {
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(header("Starred")).toHaveAttribute("draggable", "true");
-
-    const dt = dataTransfer();
-    fireEvent.dragStart(header("Starred"), { dataTransfer: dt });
-    expect(dt.types).toEqual([CARD_DRAG_TYPE]); // never files: no application/x-dam-files
-    dt.protectedMode = true; // while hovering, a page sees the types only
-    expect(fireEvent.dragOver(card("Inbox"), { dataTransfer: dt })).toBe(false); // accepted
-    dt.protectedMode = false;
-    fireEvent.drop(card("Inbox"), { dataTransfer: dt });
-    fireEvent.dragEnd(header("Starred"), { dataTransfer: dt });
-    expect(order()).toEqual(["Starred", "Inbox", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay"]);
-
-    const again = dataTransfer();
-    fireEvent.dragStart(header("Inbox"), { dataTransfer: again });
-    const columns = document.querySelectorAll<HTMLElement>(".today-col");
-    fireEvent.dragOver(columns[1], { dataTransfer: again });
-    fireEvent.drop(columns[1], { dataTransfer: again });
-    expect(order()).toEqual(["Starred", "To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Inbox"]);
-    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY)!).order).toEqual([
-      "starred",
-      "tray:to-action",
-      "tray:to-read",
-      "collections",
-      "clear", // hidden here (no tray is clear) but it keeps its place
-      "reminders",
-      "|",
-      "search",
-      "tray:to-pay",
-      "inbox",
-    ]);
-  });
-
-  it("Option-Down past the bottom of a column puts the focus on the card's header in the next column", async () => {
-    const { user } = renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    foldButton("Reminders").focus();
-    await altKey(user, "ArrowDown");
-    expect(order()).toEqual(DEFAULT_ORDER); // the same page order, but in the other column
-    const columns = document.querySelectorAll<HTMLElement>(".today-col");
-    expect(columns[1].contains(card("Reminders"))).toBe(true); // a new element in the other column
-    expect(document.activeElement).toBe(foldButton("Reminders"));
-    await altKey(user, "ArrowUp"); // the keys go on
-    expect(order()).toEqual(DEFAULT_ORDER);
-    expect(columns[0].contains(card("Reminders"))).toBe(true);
-    expect(document.activeElement).toBe(foldButton("Reminders"));
-  });
-
-  it("a drop in the gap between two cards lands between them (the nearest slot by height)", async () => {
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    const columns = document.querySelectorAll<HTMLElement>(".today-col");
-    // the second column's cards: 100 px tall with 10 px gaps
-    [...columns[1].querySelectorAll<HTMLElement>(".today-slot")].forEach((slot, i) => {
-      const top = i * 110;
-      vi.spyOn(slot, "getBoundingClientRect").mockReturnValue({
-        top,
-        bottom: top + 100,
-        height: 100,
-        left: 0,
-        right: 300,
-        width: 300,
-        x: 0,
-        y: top,
-        toJSON: () => ({}),
-      } as DOMRect);
-    });
-    const at = (type: "dragOver" | "drop", clientY: number, dt: ReturnType<typeof dataTransfer>) => {
-      const event = createEvent[type](columns[1], { dataTransfer: dt });
-      Object.defineProperty(event, "clientY", { value: clientY });
-      fireEvent(columns[1], event);
-    };
-    const dt = dataTransfer();
-    fireEvent.dragStart(header("Inbox"), { dataTransfer: dt });
-    at("dragOver", 215, dt); // between To pay (110–210) and Starred (220–320)
-    expect(card("Starred").closest(".today-slot")).toHaveAttribute("data-drop", "before");
-    at("drop", 215, dt);
-    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Search", "To pay", "Inbox", "Starred"]);
-
-    const below = dataTransfer();
-    fireEvent.dragStart(header("To action"), { dataTransfer: below });
-    at("drop", 10_000, below); // under the last card: the end of the column
-    expect(order().at(-1)).toBe("To action");
-  });
-
-  it("files dragged over a card are not taken as a card", async () => {
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    const dt = dataTransfer();
-    setDragFiles({ dataTransfer: dt } as unknown as DragEvent, ["d1"], "bill.pdf");
-    dt.setData(CARD_DRAG_TYPE, "reminders"); // even a forged card id beside the files
-    expect(fireEvent.dragOver(card("To pay"), { dataTransfer: dt })).toBe(true); // not accepted
-    fireEvent.drop(card("To pay"), { dataTransfer: dt });
-    expect(order()).toEqual(DEFAULT_ORDER);
-    document.dispatchEvent(new Event("dragend"));
-  });
-
-  it("a saved layout naming a removed tray still shows every card; a new card goes to its default place", async () => {
-    localStorage.setItem(
-      LAYOUT_KEY,
-      JSON.stringify({ order: ["tray:gone", "tray:to-action", "|", "reminders", "inbox"], collapsed: { "tray:gone": true } }),
-    );
-    renderToday();
-    await screen.findByRole("article", { name: "Northpower sähkö" });
-    expect(order()).toEqual(["To action", "To⟨U+200B⟩read", "Collections to do", "Reminders", "Inbox", "Search", "To pay", "Starred"]);
-  });
-
-  describe("one figure per tray card, and collections only when they need attention", () => {
-    const collection = (id: number, name: string, files: number, open_checks: number, in_inbox: number) => ({
-      id,
-      name,
-      files,
-      open_checks,
-      note_excerpt: "",
-      in_inbox,
-    });
-
-    it("every tray card leads with one big figure: the total for To pay, the open count otherwise", async () => {
-      renderToday();
-      await screen.findByRole("article", { name: "Water pipe inspection" });
-      expect(within(card("To pay")).getByText("412,90 €")).toHaveClass("today-big");
-      expect(card("To pay")).toHaveTextContent("4 open · 1 overdue");
-      expect(within(card("To action")).getByText("1")).toHaveClass("today-big");
-      expect(card("To action")).toHaveTextContent("1 open");
-      expect(within(card("To⟨U+200B⟩read")).getByText("6")).toHaveClass("today-big");
-      expect(card("To⟨U+200B⟩read")).toHaveTextContent("6 open · oldest");
-    });
-
-    it("an empty tray joins the one Clear card instead of showing a Nothing open. card", async () => {
-      const body = {
-        ...TODAY,
-        attention: TODAY.attention.filter((a) => a.tray !== "to-action"),
-        open_items: TODAY.open_items.filter((t) => t.tray_id !== "to-action"),
-        overview: {
-          ...TODAY.overview,
-          trays: TODAY.overview.trays.map((t) => (t.tray_id === "to-action" ? { ...t, open: 0 } : t)),
-        },
-      };
-      renderToday({ "GET /api/today": { body } });
-      const clear = await screen.findByRole("region", { name: "Clear" });
-      expect(clear).toHaveTextContent("To action is clear.");
-      expect(within(clear).getByRole("link", { name: "To action" })).toHaveAttribute("href", "/trays/to-action");
-      expect(screen.queryByRole("region", { name: "To action" })).toBeNull();
-      expect(screen.queryByText("Nothing open.")).toBeNull();
-    });
-
-    it("lists only the collections with open checklist items or files still in the inbox", async () => {
-      const collections = [
-        collection(7, "Sauna", 23, 2, 0),
-        collection(8, "House sale", 4, 0, 1),
-        collection(9, "Riverside", 0, 0, 0),
-      ];
-      renderToday({ "GET /api/today": { body: { ...TODAY, overview: { ...TODAY.overview, collections } } } });
-      const region = await screen.findByRole("region", { name: "Collections to do" });
-      expect(within(region).getByRole("link", { name: "Sauna" })).toBeInTheDocument();
-      expect(within(region).getByRole("link", { name: "House sale" })).toBeInTheDocument();
-      expect(region).toHaveTextContent("4 files · 1 file in the inbox");
-      expect(within(region).queryByRole("link", { name: "Riverside" })).not.toBeInTheDocument();
-    });
-
-    it("no collections card when none needs attention", async () => {
-      const collections = [collection(9, "Riverside", 0, 0, 0), collection(10, "Done deal", 12, 0, 0)];
-      renderToday({ "GET /api/today": { body: { ...TODAY, overview: { ...TODAY.overview, collections } } } });
-      await screen.findByRole("article", { name: "Water pipe inspection" });
-      expect(screen.queryByRole("region", { name: /Collections/ })).not.toBeInTheDocument();
-      expect(document.querySelector('[data-card-id="collections"]')).toBeNull();
-    });
+    expect(screen.queryByRole("region", { name: /Collections/ })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-card-id="collections"]')).toBeNull();
   });
 });
 
@@ -1121,6 +592,20 @@ describe("Starred card and the Important notice (stars)", () => {
     await waitFor(() => expect(posts(calls, "/api/files/a/open")).toHaveLength(1));
     await user.click(within(rows[1]).getByRole("button", { name: "Quick Look" }));
     expect(await screen.findByRole("dialog", { name: "Quick Look: 2026_Plan.xlsx" })).toBeInTheDocument();
+  });
+
+  it("folds to a count while arranging, and says when nothing is starred", async () => {
+    const { user, view } = renderToday({ "GET /api/marks/collection/starred": { body: STARRED } });
+    const starred = await screen.findByRole("region", { name: "Starred" });
+    await within(starred).findByRole("list", { name: "Starred files" });
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    await user.click(within(starred).getByRole("button", { name: "Collapse Starred" }));
+    expect(starred).toHaveTextContent("3 starred files");
+    expect(within(starred).queryByRole("list")).toBeNull();
+    view.unmount();
+    localStorage.clear();
+    renderToday({ "GET /api/marks/collection/starred": { body: { ...STARRED, members: [] } } });
+    expect(await screen.findByText(/No starred files\. Click ★ on a file/)).toBeInTheDocument();
   });
 
   it("☆ unstars a row in one click; the toast offers Star again", async () => {
@@ -1178,27 +663,4 @@ describe("Starred card and the Important notice (stars)", () => {
     expect(posts(calls, "/api/quarantine").map((c) => c.body)).toEqual([{ drive_ids: ["a"], dry_run: true }]);
   });
 
-  it("folds to a count like every card, and says when nothing is starred", async () => {
-    const { user, view } = renderToday({ "GET /api/marks/collection/starred": { body: STARRED } });
-    const starred = await screen.findByRole("region", { name: "Starred" });
-    await within(starred).findByRole("list", { name: "Starred files" });
-    await user.click(within(starred).getByRole("button", { name: "Collapse Starred" }));
-    expect(starred).toHaveTextContent("3 starred files");
-    expect(within(starred).queryByRole("list")).toBeNull();
-    view.unmount();
-    localStorage.clear();
-    renderToday({ "GET /api/marks/collection/starred": { body: { ...STARRED, members: [] } } });
-    expect(await screen.findByText(/No starred files\. Click ★ on a file/)).toBeInTheDocument();
-  });
-
-  it("links to Convert ##. Important when its entries are unmanaged; no banner otherwise", async () => {
-    const { view } = renderToday({ "GET /api/today": { body: { ...TODAY, unmanaged_important: 3 } } });
-    const banner = await screen.findByRole("region", { name: "Convert ##. Important" });
-    expect(banner).toHaveTextContent("3 entries in ##. Important are not in the app yet.");
-    expect(within(banner).getByRole("link", { name: "Convert" })).toHaveAttribute("href", "/important/convert");
-    view.unmount();
-    renderToday();
-    await screen.findByRole("region", { name: "Inbox" });
-    expect(screen.queryByRole("region", { name: "Convert ##. Important" })).toBeNull();
-  });
 });

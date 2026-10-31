@@ -60,29 +60,24 @@ function setup(ui: React.ReactElement, extra: Parameters<typeof mockFetch>[0] = 
 describe("From and For chips", () => {
   it("say nothing is set, and offer the picker", async () => {
     setup(<FromFor entry={entry()} />);
-    expect(screen.getByRole("button", { name: "From: not set" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "For: not set" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "From Who sent it?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "For Who is it for?" })).toBeInTheDocument();
   });
 
-  it("in New, label and value are separate parts of one button, the value alone ellipsised", () => {
-    document.documentElement.dataset.style = "new";
-    try {
-      setup(<FromFor entry={entry({}, assigned("owner", { sender: "A very long sender name without any break at all" , person: null }))} />);
-      const [from, forWhom] = Array.from(document.querySelectorAll<HTMLElement>(".from-for-chip"));
-      expect(from.querySelector(".from-for-word")?.textContent).toBe("From");
-      expect(from.querySelector(".from-for-value")?.textContent).toBe("A very long sender name without any break at all");
-      expect(forWhom.querySelector(".from-for-word")?.textContent).toBe("For");
-      expect(forWhom.querySelector(".from-for-value")?.textContent).toBe("Who is it for?");
-    } finally {
-      delete document.documentElement.dataset.style;
-    }
+  it("label and value are separate parts of one button, the value alone ellipsised", () => {
+    setup(<FromFor entry={entry({}, assigned("owner", { sender: "A very long sender name without any break at all" , person: null }))} />);
+    const [from, forWhom] = Array.from(document.querySelectorAll<HTMLElement>(".from-for-chip"));
+    expect(from.querySelector(".from-for-word")?.textContent).toBe("From");
+    expect(from.querySelector(".from-for-value")?.textContent).toBe("A very long sender name without any break at all");
+    expect(forWhom.querySelector(".from-for-word")?.textContent).toBe("For");
+    expect(forWhom.querySelector(".from-for-value")?.textContent).toBe("Who is it for?");
   });
 
   it.each([
-    ["assigned", entry({ person: "Tiina", person_source: "assigned" }, assigned("owner")), "For: Tiina · you set this"],
-    ["address area", entry({ person: "Tiina", person_source: "address area" }), "For: Tiina · address area"],
-    ["rule", entry({ person: "Tiina", person_source: "rule:pohjola" }), "For: Tiina · rule pohjola"],
-    ["filed", entry({ person: "Tiina", person_source: "assigned" }, assigned("filing")), "For: Tiina · filed"],
+    ["assigned", entry({ person: "Tiina", person_source: "assigned" }, assigned("owner")), "For Tiina · you set this"],
+    ["address area", entry({ person: "Tiina", person_source: "address area" }), "For Tiina · address area"],
+    ["rule", entry({ person: "Tiina", person_source: "rule:pohjola" }), "For Tiina · rule pohjola"],
+    ["filed", entry({ person: "Tiina", person_source: "assigned" }, assigned("filing")), "For Tiina · filed"],
   ])("name where the person came from: %s", (_name, e, expected) => {
     setup(<FromFor entry={e} />);
     expect(screen.getByRole("button", { name: expected })).toBeInTheDocument();
@@ -90,12 +85,12 @@ describe("From and For chips", () => {
 
   it("name where the sender came from", () => {
     setup(<FromFor entry={entry({}, assigned("owner", { person: null }))} />);
-    expect(screen.getByRole("button", { name: "From: Pohjola · you set this" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "From Pohjola · you set this" })).toBeInTheDocument();
   });
 
   it("set the person from the list and reload the inbox", async () => {
     const { calls, user } = setup(<FromFor entry={entry()} />);
-    await user.click(screen.getByRole("button", { name: "For: not set" }));
+    await user.click(screen.getByRole("button", { name: "For Who is it for?" }));
     const sheet = await screen.findByRole("dialog", { name: "For" });
     expect(within(sheet).getByRole("button", { name: "Save" })).toBeDisabled();
     await user.click(await within(sheet).findByRole("button", { name: "Tiina" }));
@@ -108,7 +103,7 @@ describe("From and For chips", () => {
 
   it("set a sender typed or picked from the ones in use", async () => {
     const { calls, user } = setup(<FromFor entry={entry()} />);
-    await user.click(screen.getByRole("button", { name: "From: not set" }));
+    await user.click(screen.getByRole("button", { name: "From Who sent it?" }));
     const sheet = await screen.findByRole("dialog", { name: "From" });
     await user.type(within(sheet).getByLabelText("Sender"), "Kela{Enter}");
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
@@ -117,7 +112,7 @@ describe("From and For chips", () => {
 
   it("pick a sender in use", async () => {
     const { calls, user } = setup(<FromFor entry={entry()} />);
-    await user.click(screen.getByRole("button", { name: "From: not set" }));
+    await user.click(screen.getByRole("button", { name: "From Who sent it?" }));
     const sheet = await screen.findByRole("dialog", { name: "From" });
     await user.click(await within(sheet).findByRole("button", { name: /^Verohallinto/ }));
     expect(within(sheet).getByLabelText("Sender")).toHaveValue("Verohallinto");
@@ -128,7 +123,7 @@ describe("From and For chips", () => {
 
   it("Clear takes the person away", async () => {
     const { calls, user } = setup(<FromFor entry={entry({ person: "Tiina", person_source: "assigned" }, assigned("owner"))} />);
-    await user.click(screen.getByRole("button", { name: /^For: Tiina/ }));
+    await user.click(screen.getByRole("button", { name: /^For Tiina/ }));
     const sheet = await screen.findByRole("dialog", { name: "For" });
     await user.click(within(sheet).getByRole("button", { name: "Clear" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
@@ -137,7 +132,7 @@ describe("From and For chips", () => {
 
   it("offer no Clear for a person that was only found in the address area", async () => {
     const { user } = setup(<FromFor entry={entry({ person: "Tiina", person_source: "address area" })} />);
-    await user.click(screen.getByRole("button", { name: /^For: Tiina/ }));
+    await user.click(screen.getByRole("button", { name: /^For Tiina/ }));
     const sheet = await screen.findByRole("dialog", { name: "For" });
     expect(within(sheet).queryByRole("button", { name: "Clear" })).toBeNull();
     expect(within(sheet).getByRole("button", { name: "Save" })).toBeInTheDocument();
@@ -145,7 +140,7 @@ describe("From and For chips", () => {
 
   it("show the server's message when saving fails", async () => {
     const { user } = setup(<FromFor entry={entry()} />, { "PUT /api/assignments": { status: 400, body: { error: "Unknown person" } } });
-    await user.click(screen.getByRole("button", { name: "For: not set" }));
+    await user.click(screen.getByRole("button", { name: "For Who is it for?" }));
     const sheet = await screen.findByRole("dialog", { name: "For" });
     await user.click(await within(sheet).findByRole("button", { name: "Tiina" }));
     await user.click(within(sheet).getByRole("button", { name: "Save" }));

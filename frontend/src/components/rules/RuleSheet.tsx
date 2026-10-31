@@ -4,7 +4,6 @@
  * document somewhere else. */
 import { RotateCcw } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useStyle } from "../../appearance";
 import {
   type Area,
   areaPictureUrl,
@@ -102,7 +101,7 @@ const NAME_TIP =
 const AREAS_TIP = "The document needs a word or the picture in every area.";
 const PERSON_IN_FOLDER_TIP =
   "Puts {person} in the Folder, so each letter goes to the folder of its own person. It does not depend on Anyone or Only for: with Anyone, every person's letters are filed, each in their own folder; with Only for it is usually not needed, because the folder can simply name that person.";
-/** The patterns the Name can hold (see NAME_TIP): the New look offers them as chips. */
+/** The patterns the Name can hold (see NAME_TIP): offered as chips. */
 const NAME_TOKENS = ["{year}", "{doc_date:%Y%m%d}", "{stem}", "{person}"] as const;
 const PAYEE_TIP = "The name filled in as the payee when this rule puts a bill in To pay.";
 const FOR_TIP =
@@ -195,10 +194,8 @@ export function RuleSheet({
   const toast = useToast();
   const save = useSaveRule();
   const ids = useId();
-  // The New look: the proof sits in a column beside the form; in a narrow sheet it folds
-  // into a summary in the footer ("Show proof" opens it under the form).
-  const [look] = useStyle();
-  const isNew = look === "new";
+  // The proof sits in a column beside the form; in a narrow sheet it folds into a summary
+  // in the footer ("Show proof" opens it under the form).
   const [proofOpen, setProofOpen] = useState(false);
 
   // plain words (anywhere in the text) and, apart from them, one group of words per area
@@ -378,8 +375,8 @@ export function RuleSheet({
       : "Make a rule"
     : `${filed ? "Update" : "Edit"} rule ${initial.id}`;
 
-  // New: what the rule is made from, under the title
-  const sourceName = useFileDetail(sourceDriveId ?? "", isNew && !!sourceDriveId).data?.record.name ?? null;
+  // what the rule is made from, under the title
+  const sourceName = useFileDetail(sourceDriveId ?? "", !!sourceDriveId).data?.record.name ?? null;
   const subtitle = sourceName ? (
     <>
       {zoneDraft ? `From ${plural(zoneDraft.zones.length + (zoneDraft.pictures ?? []).length, "box", "boxes")} on` : "Tested with"}{" "}
@@ -387,7 +384,7 @@ export function RuleSheet({
     </>
   ) : undefined;
 
-  /** A token chip puts its pattern into the field where the caret is (New look). */
+  /** A token chip puts its pattern into the field where the caret is. */
   const insertToken = (fieldId: string, value: string, set: (v: string) => void, token: string) => {
     const el = document.getElementById(fieldId) as HTMLInputElement | null;
     const from = el?.selectionStart ?? value.length;
@@ -410,7 +407,7 @@ export function RuleSheet({
         aria-describedby={tip ? `${ids}-${label}-tip` : undefined}
         onChange={(e) => set(e.target.value)}
       />
-      {isNew && tokens && (
+      {tokens && (
         <div className="rule-tokens" role="group" aria-label={`Insert into ${label.toLowerCase()}`}>
           <span>Insert</span>
           {tokens.map((t) => (
@@ -434,13 +431,13 @@ export function RuleSheet({
       <Sheet
         open
         title={title}
-        subtitle={isNew ? subtitle : undefined}
-        closeButton={isNew}
+        subtitle={subtitle}
+        closeButton
         onClose={onClose}
         className={proofOpen ? "rule-sheet proof-open" : "rule-sheet"}
         footer={
           <>
-            {isNew && hasCondition && (
+            {hasCondition && (
               <div className="proof-mini">
                 <ProofSummary replay={test.replay} />
                 <button type="button" aria-expanded={proofOpen} onClick={() => setProofOpen((open) => !open)}>
@@ -458,7 +455,7 @@ export function RuleSheet({
               </span>
             )}
             {hasCondition && pendingColl && <span className="hint footer-start">{pendingColl}</span>}
-            {isNew && !draft && !initial.learned && initial.file && (
+            {!draft && !initial.learned && initial.file && (
               <span className="hint footer-start rule-rewrite">{visible(rewriteNote("Saving", initial.file))}</span>
             )}
             <button type="button" onClick={onClose}>Cancel</button>
@@ -468,7 +465,7 @@ export function RuleSheet({
               disabled={!canSave}
               onClick={() => (different > 0 ? setAsking(true) : void doSave())}
             >
-              {hasCondition && tested === null && !failed ? "Testing…" : isNew ? "Save rule" : "Save"}
+              {hasCondition && tested === null && !failed ? "Testing…" : "Save rule"}
             </button>
           </>
         }
@@ -476,7 +473,7 @@ export function RuleSheet({
         <section className="rule-section" aria-labelledby={`${ids}-when-h`}>
           <div className="rule-section-head">
             <h3 id={`${ids}-when-h`} className="rule-section-title">When a document matches</h3>
-            {isNew && <span className="rule-section-sub">a word or the picture in every area</span>}
+            <span className="rule-section-sub">a word or the picture in every area</span>
             {areas.length > 1 && <InfoTip id={`${ids}-areas-tip`} tip={AREAS_TIP} />}
           </div>
           {(areas.length === 0 || words.length > 0) && (
@@ -732,7 +729,6 @@ export function RuleSheet({
             readingNow={test.readingNow}
           />
         )}
-        {!isNew && !draft && !initial.learned && initial.file && <p className="hint">{visible(rewriteNote("Saving", initial.file))}</p>}
         {error && <p className="error" role="alert">{visible(error)}</p>}
       </Sheet>
       {asking && (
@@ -756,7 +752,7 @@ export function RuleSheet({
   );
 }
 
-/** The proof in one line (New look, narrow sheet): whether the rule matches the document it
+/** The proof in one line (narrow sheet): whether the rule matches the document it
  * was made from, how many filed documents would land where they are, and how many elsewhere. */
 function ProofSummary({ replay }: { replay: Replay | undefined }) {
   if (!replay) return <span className="proof-line busy">Testing against your filed documents…</span>;
@@ -804,8 +800,6 @@ function AreaWords({
   onRemove: () => void;
 }) {
   const id = useId();
-  const [look] = useStyle();
-  const isNew = look === "new";
   const [adding, setAdding] = useState("");
   const add = () => {
     const w = adding.trim().toLowerCase();
@@ -848,26 +842,12 @@ function AreaWords({
         />
         <div className="rule-match">
           <label htmlFor={`${id}-match`}>Words match</label>
-          {isNew ? (
-            <Segmented
-              ariaLabel={`How the words match in ${label.toLowerCase()}`}
-              options={MATCH_CHOICES}
-              value={match}
-              onChange={onMatch}
-            />
-          ) : (
-            <select
-              id={`${id}-match`}
-              value={match}
-              aria-label={`How the words match in ${label.toLowerCase()}`}
-              aria-describedby={`${id}-match-tip`}
-              onChange={(e) => onMatch(e.target.value as Match)}
-            >
-              {MATCH_CHOICES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          )}
+          <Segmented
+            ariaLabel={`How the words match in ${label.toLowerCase()}`}
+            options={MATCH_CHOICES}
+            value={match}
+            onChange={onMatch}
+          />
           <InfoTip id={`${id}-match-tip`} tip={MATCH_TIP} />
         </div>
       </div>

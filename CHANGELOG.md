@@ -117,6 +117,14 @@ All notable changes are listed here. The format follows
 - Every document's business IDs are read once more from its stored text, since the
   Netherlands pack is new.
 
+### Removed
+
+- **The Classic look.** New has been the default since 0.9.0 and now has everything
+  Classic had, so Classic, its card in Settings, Appearance and the Ctrl+Alt+L shortcut
+  are gone. A browser that was set to Classic opens in New. Two Today cards that only
+  Classic had go with it: Search (use the search palette, ⌘K, or Browse) and Clear (every
+  tray keeps its place on Today and an empty one says so).
+
 ### Fixed
 
 - A new picture rule's areas no longer show on every other document in the Inbox. Only a

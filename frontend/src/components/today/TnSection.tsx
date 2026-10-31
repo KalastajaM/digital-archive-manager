@@ -1,7 +1,6 @@
-/** A section of the New look's Today: a plain heading (name, a figure beside it, links
+/** A section of Today: a plain heading (name, a figure beside it, links
  * at the right) over its content, with no box. It takes the same props as ``Card`` so
- * Today's cards (Starred, Collections, Reminders, Search, Clear) can wear either as their
- * ``Shell``. While the page is being arranged (Customize) the heading shows the fold
+ * Today's cards (Starred, Collections, Reminders) can wear either as their ``Shell``. While the page is being arranged (Customize) the heading shows the fold
  * chevron and Move up / Move down, and can be dragged; otherwise it is a calm heading. */
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
 import { createContext, type HTMLAttributes, type ReactNode, useContext, useId } from "react";
@@ -37,7 +36,7 @@ export function TnSection({ title, actions, children, className, fold, headerPro
   const headingId = useId();
   const bodyId = useId();
   const { arranging, canUp, canDown, up, down } = useContext(SectionContext);
-  // the Classic card classes (today-card, ...) that the cards pass are not this look's
+  // only the tn- classes pass; the card classes (today-card, ...) the cards pass are not this layout's
   const own = (className ?? "").split(" ").filter((c) => c.startsWith("tn-"));
   const classes = ["tn-section", ...own, fold?.folded && "tn-folded"].filter(Boolean).join(" ");
   return (

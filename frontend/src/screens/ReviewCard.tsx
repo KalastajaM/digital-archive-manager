@@ -1,7 +1,5 @@
-import { PanelRightClose, PanelRightOpen, ShieldCheck, Sparkles } from "lucide-react";
-import { useStyle } from "../appearance";
+import { ShieldCheck } from "lucide-react";
 import { EditRuleSheet } from "../components/rules/EditRule";
-import { IconButton } from "../components/ui/IconButton";
 import { TipButton } from "../components/ui/TipButton";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -43,19 +41,16 @@ import {
   type TrayValues,
 } from "../components/TrayPicker";
 import { useToast } from "../components/Toasts";
-import { Toolbar } from "../components/ui/Toolbar";
 import { fieldWord, shortDate } from "../format";
 import { dialogOpen, isCmdEnter, isShortcut, OWN_ENTER, useKeydown } from "../keyboard";
 import { visible } from "../text";
 import { LinkBadges } from "./FileActions";
 import { type Filing, FILING_BUSY, followUpLines, withFollowUps } from "./useFiling";
-import { LockControl } from "../components/LockControl";
 import { useInboxFolder } from "../components/MoveTo";
-import { MarkToggles } from "../components/MarkToggles";
 import { FileActionIcons } from "../components/FileActionIcons";
 import { FilePanelSkeleton, StaticFileHead } from "../components/FilePanelSkeleton";
 import { allMarked, type Markable, useBatchMark } from "../components/useBatchMark";
-import { TRASH_KEY, TRASH_LABEL, TrashButton } from "../components/Trash";
+import { TRASH_KEY, TRASH_LABEL } from "../components/Trash";
 import { suggestingRule, titleOf } from "./inboxQueue";
 import {
   addTags,
@@ -282,11 +277,11 @@ type Props = {
   entry: InboxEntry;
   filing: Filing;
   trash?: CardTrash;
-  /** The New look's "Inbox N" button (the list is folded in a narrow window). */
+  /** The "Inbox N" button (the list is folded in a narrow window). */
   lead?: ReactNode;
   /** Skip: on to the next file in the queue without filing this one (s). */
   onSkip?: () => void;
-  /** The New look: Quick Look on this file (the icon row's). */
+  /** Quick Look on this file (the icon row's). */
   onQuickLook?: () => void;
 };
 
@@ -294,8 +289,6 @@ type Props = {
  * editable proposal as a narrow inspector beside it. */
 export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuickLook }: Props) {
   const ids = useId();
-  const [look] = useStyle();
-  const isNew = look === "new";
   const [editingRule, setEditingRule] = useState(false);
   const [name, setName] = useState(entry.suggestion.name);
   const inbox = useInboxFolder();
@@ -319,8 +312,6 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const [important, setImportant] = useState(entry.suggestion.important === true);
   // Set on the first Preview / File it: from then on a missing field is shown live.
   const [tried, setTried] = useState(false);
-  // Narrow windows hide the preview pane (the form matters most); this shows it again.
-  const [showPreview, setShowPreview] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
@@ -485,7 +476,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
   const inFolder = folderOf(entry.record.path);
   const inboxSubfolder = inbox && inFolder.startsWith(`${inbox}/`) ? inFolder.slice(inbox.length + 1) : inbox ? null : inFolder;
 
-  // "Collection and note": in the form after the tray in Classic, folded at the end in New
+  // "Collection and note": folded at the end of the form
   const collectionAndNote = (
     <>
       <CollectionNamesInput
@@ -580,7 +571,6 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
         ) : (
           <TrayFields tray={tray} values={trayFields} found={found} onChange={editField} chips={trayChips} />
         ))}
-      {!isNew && collectionAndNote}
       {fromSticker && (
         <StickerMarks
           star={star}
@@ -594,12 +584,10 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
       )}
       <hr />
       <DetectedFields entry={entry} />
-      {isNew && (
-        <details className="panel-more" open={collections.length > 0 || note.trim() !== "" || !!answer?.summary.trim()}>
-          <summary>Collection and note</summary>
-          {collectionAndNote}
-        </details>
-      )}
+      <details className="panel-more" open={collections.length > 0 || note.trim() !== "" || !!answer?.summary.trim()}>
+        <summary>Collection and note</summary>
+        {collectionAndNote}
+      </details>
     </>
   );
   // where the files it shares a sender, tag or IBAN with were filed: a hint for this one
@@ -627,15 +615,7 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
       />
     </div>
   );
-  const form = (
-    <>
-      {formMain}
-      {isNew && relativesNode}
-      {planNode}
-    </>
-  );
-
-  // The New look's icon rows: the look row (Ask AI is the suggestion header's link, From and For
+  // The icon rows: the look row (Ask AI is the suggestion header's link, From and For
   // the form's chips, Put in tray the form's tray picker, the bin the footer's To Delete)
   // and ★ / ! (the same toggles as Browse's, applied at once).
   const batchMarks = useBatchMark();
@@ -649,201 +629,134 @@ export default function ReviewCard({ entry, filing, trash, lead, onSkip, onQuick
     />
   );
 
-  if (isNew) {
-    const rule = suggestingRule(entry.suggestion);
-    const codeHit = entry.suggestion.codes.find((c) => !c.overridden);
-    const kicker = rule ? `Suggested by rule “${rule}”` : codeHit ? `Suggested by filing code ${codeHit.code}` : "No rule matched";
-    const date = entry.record.mtime ? shortDate(entry.record.mtime) : "";
-    const meta = [date, inboxSubfolder && `in ${inboxSubfolder}`].filter(Boolean).join(" · ");
-    const title = titleOf(entry);
-    // what filing will do, in a line: from the form as it is now
-    const renames = name.trim() !== "" && name.trim() !== fileName;
-    const moves = folder.trim() !== "";
-    const verb = renames && moves ? "Renames and moves 1 file" : renames ? "Renames 1 file" : moves ? "Moves 1 file" : "Keeps the file as it is";
-    const adds = [
-      ...(tray && !alreadyIn ? [`adds it to ${tray.name}`] : []),
-      ...(collections.length > 0 ? [`adds it to ${collections.join(", ")}`] : []),
-    ];
-    const summary = `${verb}${adds.length > 0 ? `, ${adds.join(", ")}` : ""}. Undo any time.`;
-    const blocked = filing.busy || lock.blocked;
-    const why = lock.blocked ? LOCKED_REASON : FILING_BUSY;
-    return (
-      <article className="review-card" aria-label={`Review ${fileName}`}>
-        <div className={showPreview ? "review-body show-preview" : "review-body"}>
-          <div className="preview-pane preview-fill">
-            <FilePreview
-              file={entry.record}
-              boxTool={{ suggestion: entry.suggestion }}
-              bar={
-                <>
-                  {lead}
-                  <span className="doc-name" title={visible(fileName)}>
-                    {visible(fileName)}
-                  </span>
-                  {meta && (
-                    <span className="doc-meta doc-wide" title={visible(meta)}>
-                      · {visible(meta)}
-                    </span>
-                  )}
-                </>
-              }
-            />
-          </div>
-          <aside className="proposal inspector" aria-label="File this document">
-            <header className="panel-head">
-              <div className="panel-head-text">
-                <span className="panel-kicker" title={visible(kicker)}>
-                  {visible(kicker)}
-                </span>
-                <h2 className="panel-title" title={visible(title)}>
-                  {visible(title)}
-                </h2>
-                {(rule || aiState.on) && (
-                  <span className="panel-links">
-                    {rule && (
-                      <button type="button" className="link-button" onClick={() => setEditingRule(true)}>
-                        Edit rule
-                      </button>
-                    )}
-                    {rule && aiState.on && " · "}
-                    {aiState.on && (
-                      <button
-                        type="button"
-                        className="link-button"
-                        title="Ask AI to suggest a name, folder and tags"
-                        disabled={filing.busy || ai.busy}
-                        onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
-                      >
-                        Ask AI
-                      </button>
-                    )}
-                  </span>
-                )}
-              </div>
-            </header>
-            <div className="panel-body">
-              <FilePanelSkeleton
-                header={<StaticFileHead driveId={entry.record.drive_id} name={fileName} folder={inFolder} path={entry.record.path} marks={entry.record.marks} />}
-                actions={fileIcons}
-                top={formMain}
-                relatives={relativesNode}
-              />
-              {planNode}
-            </div>
-            <footer className="panel-foot">
-              <p className="panel-summary">
-                {!fieldProblem && <ShieldCheck size={14} aria-hidden="true" />}
-                <span>{visible(fieldProblem ? fieldProblem.message : summary)}</span>
-                <TipButton
-                  className="link-button"
-                  tip="Show exactly what will move, before anything changes ↩"
-                  onClick={preview}
-                  disabled={blocked}
-                  disabledReason={why}
-                >
-                  Preview
-                </TipButton>
-              </p>
-              <div className="panel-actions">
-                <button type="button" onClick={onSkip} disabled={!onSkip || filing.busy} title="Leave this file here and go on to the next one (s)">
-                  Skip
-                </button>
-                {trash && (
-                  <TipButton
-                    tip={`${TRASH_LABEL} ${TRASH_KEY}`}
-                    aria-label={TRASH_LABEL}
-                    onClick={trash.run}
-                    disabled={filing.busy || trash.busy || lock.blocked}
-                    disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
-                  >
-                    To Delete
-                  </TipButton>
-                )}
-                <span className="panel-actions-gap" />
-                <TipButton
-                  className="primary tip-end"
-                  aria-label="File it"
-                  aria-keyshortcuts="Meta+Enter"
-                  tip="Move it to the folder with the new name ⌘↩"
-                  onClick={fileIt}
-                  disabled={blocked}
-                  disabledReason={why}
-                >
-                  File it <kbd aria-hidden="true">⌘↵</kbd>
-                </TipButton>
-              </div>
-            </footer>
-          </aside>
-        </div>
-        {editingRule && rule && (
-          <EditRuleSheet ruleId={rule} driveId={entry.record.drive_id} onClose={() => setEditingRule(false)} />
-        )}
-      </article>
-    );
-  }
+  const rule = suggestingRule(entry.suggestion);
+  const codeHit = entry.suggestion.codes.find((c) => !c.overridden);
+  const kicker = rule ? `Suggested by rule “${rule}”` : codeHit ? `Suggested by filing code ${codeHit.code}` : "No rule matched";
+  const date = entry.record.mtime ? shortDate(entry.record.mtime) : "";
+  const meta = [date, inboxSubfolder && `in ${inboxSubfolder}`].filter(Boolean).join(" · ");
+  const title = titleOf(entry);
+  // what filing will do, in a line: from the form as it is now
+  const renames = name.trim() !== "" && name.trim() !== fileName;
+  const moves = folder.trim() !== "";
+  const verb = renames && moves ? "Renames and moves 1 file" : renames ? "Renames 1 file" : moves ? "Moves 1 file" : "Keeps the file as it is";
+  const adds = [
+    ...(tray && !alreadyIn ? [`adds it to ${tray.name}`] : []),
+    ...(collections.length > 0 ? [`adds it to ${collections.join(", ")}`] : []),
+  ];
+  const summary = `${verb}${adds.length > 0 ? `, ${adds.join(", ")}` : ""}. Undo any time.`;
+  const blocked = filing.busy || lock.blocked;
+  const why = lock.blocked ? LOCKED_REASON : FILING_BUSY;
   return (
     <article className="review-card" aria-label={`Review ${fileName}`}>
-      <Toolbar
-        lead={lead}
-        title={visible(fileName)}
-        subtitle={inboxSubfolder && visible(inboxSubfolder)}
-        actions={
-          <>
-            {/* the app's one order: view, marks, Ask AI, the bin last; then this card's own steps */}
-            <IconButton
-              className="preview-toggle"
-              icon={showPreview ? <PanelRightClose /> : <PanelRightOpen />}
-              label={showPreview ? "Hide preview" : "Show preview"}
-              pressed={showPreview}
-              onClick={() => setShowPreview((v) => !v)}
-            />
-            <MarkToggles driveId={entry.record.drive_id} name={fileName} marks={entry.record.marks} />
-            <LockControl driveId={entry.record.drive_id} marks={entry.record.marks} path={entry.record.path} />
-            {aiState.on && (
-              <IconButton
-                icon={<Sparkles />}
-                label="Ask AI"
-                tip="Ask AI to suggest a name, folder and tags"
-                disabled={filing.busy || ai.busy}
-                onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
-              />
-            )}
-            {trash && (
-              <TrashButton
-                disabled={filing.busy || trash.busy}
-                disabledReason={lock.blocked ? LOCKED_REASON : null}
-                onClick={trash.run}
-              />
-            )}
-            <TipButton
-              className="tip-end"
-              tip="Show exactly what will move, before anything changes ↩"
-              onClick={preview}
-              disabled={filing.busy || lock.blocked}
-              disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
-            >
-              Preview
-            </TipButton>
-            <TipButton
-              className="primary tip-end"
-              tip="Move it to the folder with the new name ⌘↩"
-              onClick={fileIt}
-              disabled={filing.busy || lock.blocked}
-              disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
-            >
-              File it
-            </TipButton>
-          </>
-        }
-      />
-      <div className={showPreview ? "review-body show-preview" : "review-body"}>
+      <div className="review-body">
         <div className="preview-pane preview-fill">
-          <FilePreview file={entry.record} boxTool={{ suggestion: entry.suggestion }} />
+          <FilePreview
+            file={entry.record}
+            boxTool={{ suggestion: entry.suggestion }}
+            bar={
+              <>
+                {lead}
+                <span className="doc-name" title={visible(fileName)}>
+                  {visible(fileName)}
+                </span>
+                {meta && (
+                  <span className="doc-meta doc-wide" title={visible(meta)}>
+                    · {visible(meta)}
+                  </span>
+                )}
+              </>
+            }
+          />
         </div>
-        <div className="proposal inspector">
-          {form}
-        </div>
+        <aside className="proposal inspector" aria-label="File this document">
+          <header className="panel-head">
+            <div className="panel-head-text">
+              <span className="panel-kicker" title={visible(kicker)}>
+                {visible(kicker)}
+              </span>
+              <h2 className="panel-title" title={visible(title)}>
+                {visible(title)}
+              </h2>
+              {(rule || aiState.on) && (
+                <span className="panel-links">
+                  {rule && (
+                    <button type="button" className="link-button" onClick={() => setEditingRule(true)}>
+                      Edit rule
+                    </button>
+                  )}
+                  {rule && aiState.on && " · "}
+                  {aiState.on && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      title="Ask AI to suggest a name, folder and tags"
+                      disabled={filing.busy || ai.busy}
+                      onClick={() => ai.ask({ drive_id: entry.record.drive_id })}
+                    >
+                      Ask AI
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+          </header>
+          <div className="panel-body">
+            <FilePanelSkeleton
+              header={<StaticFileHead driveId={entry.record.drive_id} name={fileName} folder={inFolder} path={entry.record.path} marks={entry.record.marks} />}
+              actions={fileIcons}
+              top={formMain}
+              relatives={relativesNode}
+            />
+            {planNode}
+          </div>
+          <footer className="panel-foot">
+            <p className="panel-summary">
+              {!fieldProblem && <ShieldCheck size={14} aria-hidden="true" />}
+              <span>{visible(fieldProblem ? fieldProblem.message : summary)}</span>
+              <TipButton
+                className="link-button"
+                tip="Show exactly what will move, before anything changes ↩"
+                onClick={preview}
+                disabled={blocked}
+                disabledReason={why}
+              >
+                Preview
+              </TipButton>
+            </p>
+            <div className="panel-actions">
+              <button type="button" onClick={onSkip} disabled={!onSkip || filing.busy} title="Leave this file here and go on to the next one (s)">
+                Skip
+              </button>
+              {trash && (
+                <TipButton
+                  tip={`${TRASH_LABEL} ${TRASH_KEY}`}
+                  aria-label={TRASH_LABEL}
+                  onClick={trash.run}
+                  disabled={filing.busy || trash.busy || lock.blocked}
+                  disabledReason={lock.blocked ? LOCKED_REASON : FILING_BUSY}
+                >
+                  To Delete
+                </TipButton>
+              )}
+              <span className="panel-actions-gap" />
+              <TipButton
+                className="primary tip-end"
+                aria-label="File it"
+                aria-keyshortcuts="Meta+Enter"
+                tip="Move it to the folder with the new name ⌘↩"
+                onClick={fileIt}
+                disabled={blocked}
+                disabledReason={why}
+              >
+                File it <kbd aria-hidden="true">⌘↵</kbd>
+              </TipButton>
+            </div>
+          </footer>
+        </aside>
       </div>
+      {editingRule && rule && (
+        <EditRuleSheet ruleId={rule} driveId={entry.record.drive_id} onClose={() => setEditingRule(false)} />
+      )}
     </article>
   );
 }

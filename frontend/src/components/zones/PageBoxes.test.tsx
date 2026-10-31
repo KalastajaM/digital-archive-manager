@@ -221,7 +221,7 @@ describe("Draw a box", () => {
       zones: [{ box: [0.1, 0.1, 0.5, 0.3], text_contains: ["pohjola"], match: "word_start" }],
     });
     expect(sent.rule.sender).toBe("Pohjola");
-    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({
       id: "pohjola",
@@ -311,7 +311,7 @@ describe("Draw a box", () => {
         { box: [0.1, 0.4, 0.5, 0.5], text_contains: ["vakuutuskirja"], match: "word_start" },
       ]);
       expect(sent.place_above).toBe("pohjola-old");
-      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
       await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
       expect(calls.find((c) => c.method === "PUT")?.url).toBe("/api/rules/pohjola?place_above=pohjola-old");
     });
@@ -496,7 +496,7 @@ describe("Draw a box", () => {
       const moved = sent.find((b) => b.rule.when.zones[0].box[0] !== 0.05);
       expect(rounded(moved?.rule.when.zones[0].box ?? [])).toEqual([0.15, 0.12, 0.55, 0.24]);
       expect(moved?.replaces).toBe("pohjola");
-      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
       await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
       const put = calls.find((c) => c.method === "PUT") as Call;
       expect(put.url).toBe("/api/rules/pohjola?replaces=pohjola");
@@ -520,26 +520,23 @@ describe("Draw a box", () => {
       drag("pohjola:0");
       const sheet = await screen.findByRole("dialog", { name: "Edit rule pohjola" });
       await within(sheet).findByText(/Matches 2 documents/);
-      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
       await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
       const body = calls.find((c) => c.method === "PUT")?.body as { person_zone: number[]; when: { zones: { box: number[] }[] } };
       expect(rounded(body.person_zone)).toEqual([0.2, 0.3, 0.7, 0.5]);
       expect(body.when.zones[0].box).toEqual(RULE.when.zones[0].box); // the rule's words area is untouched
     });
 
-    it("saves the archive-wide address area to the settings after asking", async () => {
-      const { calls, user } = setup({ "PUT /api/settings/people": { body: PEOPLE } }, pdf, tool([ADDRESS("")]));
+    it("moves the address area on this document only, at once", async () => {
+      const AREA_URL = `/api/files/${pdf.drive_id}/address-area`;
+      const { calls } = setup({ [`PUT ${AREA_URL}`]: { body: { state: "document", box: [0.2, 0.3, 0.7, 0.5] } } }, pdf, tool([ADDRESS("")]));
       await screen.findByTitle("Address area");
       drag(":0");
-      const sheet = await screen.findByRole("dialog", { name: "Change the address area" });
-      expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
-      await waitFor(() => expect(within(sheet).getByRole("button", { name: "Save" })).toBeEnabled());
-      await user.click(within(sheet).getByRole("button", { name: "Save" }));
-      await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
-      const body = calls.find((c) => c.method === "PUT")?.body as { people: unknown; address_zone: number[] };
-      expect(body.people).toEqual(PEOPLE.people);
-      expect(rounded(body.address_zone)).toEqual([0.2, 0.3, 0.7, 0.5]);
-      expect(await screen.findByText("Address area saved for all letters.")).toBeInTheDocument();
+      await waitFor(() => expect(calls.filter((c) => c.method === "PUT" && c.url === AREA_URL)).toHaveLength(1));
+      const body = calls.find((c) => c.method === "PUT" && c.url === AREA_URL)?.body as { box: number[] };
+      expect(rounded(body.box)).toEqual([0.2, 0.3, 0.7, 0.5]);
+      expect(calls.some((c) => c.method === "PUT" && c.url === "/api/settings/people")).toBe(false);
+      expect(await screen.findByText("Address area moved on this document.")).toBeInTheDocument();
     });
 
     it("cuts a picture area again from this document when it is moved, and tests the rule with the new crop", async () => {
@@ -566,7 +563,7 @@ describe("Draw a box", () => {
       expect(rounded(cut.box)).toEqual([0.15, 0.12, 0.55, 0.24]);
       await within(sheet).findByText(/Matches 2 documents/);
       expect(within(sheet).getByRole("img", { name: "Picture of area" })).toHaveAttribute("src", "/api/rules/areas/pohjola-2.png");
-      await user.click(within(sheet).getByRole("button", { name: "Save" }));
+      await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
       await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
       const body = calls.find((c) => c.method === "PUT")?.body as { when: { zones: { box: number[]; image: string; min_score: number }[] } };
       expect(body.when.zones[0]).toMatchObject({ image: "areas/pohjola-2.png", min_score: 0.9 });
@@ -627,7 +624,7 @@ describe("Draw a box", () => {
         waiting[0].answer("areas/pohjola-2.png"); // the older cut, late: dropped
         await within(sheet).findByText(/Matches 2 documents/);
         expect(within(sheet).getByRole("img", { name: "Picture of area" })).toHaveAttribute("src", "/api/rules/areas/pohjola-3.png");
-        await user.click(within(sheet).getByRole("button", { name: "Save" }));
+        await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
         await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
         const body = calls.find((c) => c.method === "PUT")?.body as { when: { zones: { box: number[]; image: string }[] } };
         expect(body.when.zones[0].image).toBe("areas/pohjola-3.png");
@@ -643,7 +640,7 @@ describe("Draw a box", () => {
         const sheet = await screen.findByRole("dialog", { name: "Edit rule plain" });
         waiting[0].answer("areas/pohjola-2.png"); // late, and not for this rule
         await within(sheet).findByText(/Matches 2 documents/);
-        await user.click(within(sheet).getByRole("button", { name: "Save" }));
+        await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
         await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
         const put = calls.find((c) => c.method === "PUT") as Call;
         expect(put.url).toBe("/api/rules/plain?replaces=plain");
@@ -827,8 +824,8 @@ describe("Picture areas", () => {
       { box: [0.1, 0.1, 0.5, 0.3], image: "areas/pohjola-1.png", min_score: 0.9 },
     ]);
     await within(sheet).findByText(/0\.90 is needed/);
-    await waitFor(() => expect(within(sheet).getByRole("button", { name: "Save" })).toBeEnabled());
-    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(sheet).getByRole("button", { name: "Save rule" })).toBeEnabled());
+    await user.click(within(sheet).getByRole("button", { name: "Save rule" }));
     // the replay lists no differences, so it saves at once
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     expect((calls.find((c) => c.method === "PUT")?.body as { when: { zones: unknown } }).when.zones).toEqual([

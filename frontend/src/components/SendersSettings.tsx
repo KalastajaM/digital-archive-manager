@@ -1,4 +1,4 @@
-/** Settings → Senders (New look): each business ID found on two or more documents, most
+/** Settings → Senders: each business ID found on two or more documents, most
  * documents first (the count opens Browse on them), with the company name read next to it. A confirmed name becomes From on
  * every document that carries the ID, except where you set From or For yourself; clearing
  * it takes those back. */

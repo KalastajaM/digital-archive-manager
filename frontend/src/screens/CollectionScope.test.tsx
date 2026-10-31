@@ -56,11 +56,9 @@ function setup(c: Collection = LEGAL, onSelectFile = vi.fn()) {
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.dataset.style = "new";
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
 describe("a collection above its files (scope)", () => {

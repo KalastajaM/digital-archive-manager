@@ -1,14 +1,13 @@
-/** Today in the New look, laid out as drawn: the date and a headline built from the real
+/** Today, laid out as drawn: the date and a headline built from the real
  * counts with Customize and Start filing, the Convert notice, four stat tiles, then two
  * columns. Left: the "To pay" table (Pay opens Pay mode on that bill, Paid marks it paid;
  * a bill that is overdue or due today opens up with its copy buttons and note) and the
  * other trays as compact lists. Right: the Inbox summary, Collections to do, Starred,
  * Reminders (search lives in the palette and Browse).
  *
- * It composes the same pieces as Classic's Today (rows, mutations, cards); only the
- * arrangement differs. Customize turns the page into an arrange mode: each section gets
- * its fold chevron and Move up / Move down and can be dragged by its heading, and Reset
- * layout puts them back (kept per archive in this browser, apart from Classic's). */
+ * Customize turns the page into an arrange mode: each section gets its fold chevron and
+ * Move up / Move down and can be dragged by its heading, and Reset layout puts them back
+ * (kept per archive in this browser). */
 import { type CSSProperties, useState } from "react";
 import { Link } from "react-router-dom";
 import { type AttentionItem, errorText, type Item, type Today as TodayData, useInbox, useToday, useTrays } from "../api/client";
@@ -27,7 +26,7 @@ import { amountField, doneName, TrayRow, trayCards, type TrayCardInfo, trayRows 
 import { SectionContext, TnSection } from "../components/today/TnSection";
 import { useCardDrag } from "../components/today/useCardDrag";
 import { useCardFrames } from "../components/today/useCardFrames";
-import { LAYOUT_KEY_NEW, useCardLayout } from "../components/useCardLayout";
+import { useCardLayout } from "../components/useCardLayout";
 import { useMarkDone } from "../components/useMarkDone";
 import { isBillTray, type PayBill, sumOfBills, useOpenBills } from "../components/usePayBills";
 import { usePayMode } from "../components/payModeContext";
@@ -262,8 +261,8 @@ function PaySection({
   );
 }
 
-/** A tray that is not a bill tray: a compact list of its first items. The rows are
- * Classic's (done checkbox, urgency tag, note, copy buttons for what needs attention). */
+/** A tray that is not a bill tray: a compact list of its first items. The rows have a done
+ * checkbox, urgency tag, note and copy buttons for what needs attention. */
 function TrayList({
   info,
   data,
@@ -424,7 +423,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const isBill = (info: TrayCardInfo) => isBillTray(info.def);
   const billTrayIds = new Set(cards.filter(isBill).map((c) => c.id));
   // Every tray keeps its place, empty or not (an empty one says so), so the left column is
-  // there with no data too; this is why the New look has no Clear section.
+  // there with no data too; this is why there is no Clear section.
   const billTrays = cards.filter(isBill);
   const otherTrays = cards.filter((c) => !isBill(c));
   const hiddenCards = [
@@ -439,7 +438,6 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
     ],
     {},
     hiddenCards,
-    LAYOUT_KEY_NEW,
   );
   const drag = useCardDrag(layout);
   const frames = useCardFrames(layout, drag);
@@ -540,7 +538,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
         </div>
       )}
       <ConvertNotice data={d} />
-      <Notices data={d} traysError={trays.isError ? errorText(trays.error) : null} banners={false} />
+      <Notices data={d} traysError={trays.isError ? errorText(trays.error) : null} />
       {tiles.length > 0 && (
         <div className="tn-tiles" role="group" aria-label="At a glance">
           {tiles.map((t) => (

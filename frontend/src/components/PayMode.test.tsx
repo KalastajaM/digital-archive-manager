@@ -84,10 +84,7 @@ async function openPayMode(user: ReturnType<typeof userEvent.setup>) {
   return within(sheet());
 }
 
-afterEach(() => {
-  cleanup();
-  delete document.documentElement.dataset.style;
-});
+afterEach(cleanup);
 
 describe("Pay mode steps through the open bills", () => {
   it("says which bill it is on and what is open in total, across bill trays, earliest due date first", async () => {
@@ -140,8 +137,7 @@ describe("Pay mode steps through the open bills", () => {
     input.remove();
   });
 
-  it("the title, amount and values follow the bill in the New look", async () => {
-    document.documentElement.dataset.style = "new";
+  it("the title, amount and values follow the bill", async () => {
     const { user } = renderPay();
     const pay = await openPayMode(user);
     expect(await pay.findByRole("heading", { name: "Water" })).toBeInTheDocument();
@@ -151,14 +147,6 @@ describe("Pay mode steps through the open bills", () => {
     await user.click(pay.getByRole("button", { name: "Next bill" }));
     expect(await pay.findByRole("heading", { name: "Electricity" })).toBeInTheDocument();
     expect(pay.getAllByText("84,20 €")).toHaveLength(2);
-  });
-
-  it("works the same in Classic, with no title heading", async () => {
-    const { user } = renderPay();
-    const pay = await openPayMode(user);
-    expect(await pay.findByText(/^Bill 1 of 4/)).toBeInTheDocument();
-    expect(pay.queryByRole("heading", { name: "Water" })).not.toBeInTheDocument();
-    expect(pay.getByLabelText("Payment details")).toHaveTextContent("47,90 €");
   });
 
   it("a bill whose barcode cannot be built still shows its values, with the reason", async () => {

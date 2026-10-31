@@ -119,8 +119,8 @@ function PrintButton(spec: PrintSpec) {
   );
 }
 
-/** The New Inbox's document bar: what leads the row of tools (the name of the file and what
- * is known about it). Set by ``FilePreview``'s ``bar``; Classic never has one. */
+/** The Inbox's document bar: what leads the row of tools (the name of the file and what
+ * is known about it). Set by ``FilePreview``'s ``bar``. */
 const BarContext = createContext<ReactNode>(null);
 
 /** One row for the document: the bar's lead, then (to the right) the tools. */
@@ -134,7 +134,7 @@ function DocBar({ lead, children, className }: { lead: ReactNode; children: Reac
   );
 }
 
-/** The New look's tools after the zoom: Open as a text button, and one ⋯ menu for Open,
+/** The tools after the zoom: Open as a text button, and one ⋯ menu for Open,
  * Print, Open in window and Show in Finder (``print``: only a page or an image can be printed). */
 function DocTools({
   driveId,
@@ -692,7 +692,7 @@ type PreviewProps = {
   showInFolder?: () => void;
   /** The "Draw a box" tool on page 1 of a PDF or an image (off when left out). */
   boxTool?: BoxTool;
-  /** The New Inbox's document bar: this leads the row of tools (the file's name and what is
+  /** The Inbox's document bar: this leads the row of tools (the file's name and what is
    * known about it), and Open and a ⋯ menu stand in for the icon buttons. */
   bar?: ReactNode;
 };

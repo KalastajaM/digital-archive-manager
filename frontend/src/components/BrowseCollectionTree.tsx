@@ -1,4 +1,4 @@
-/** The collection tree beside Browse's panes (the New look): Important and Starred first, then
+/** The collection tree beside Browse's panes: Important and Starred first, then
  * the open collections as they nest, in their own order. A click lists the collection's files
  * in Browse (a `collection:` search, or `is:starred` / `is:important`); files dropped on a
  * collection are added to it, as on the sidebar's rows.

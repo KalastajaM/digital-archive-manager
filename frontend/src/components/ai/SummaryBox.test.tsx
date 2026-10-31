@@ -46,7 +46,6 @@ async function summarize() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete document.documentElement.dataset.style;
 });
 
 describe("SummaryBox", () => {
@@ -179,29 +178,16 @@ describe("SummaryBox", () => {
     expect(screen.queryByRole("button", { name: "Discard" })).not.toBeInTheDocument();
   });
 
-  it("Edit saves the user's own text with replace", async () => {
-    const calls = setup(USER);
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const box = screen.getByLabelText("Your summary");
-    await userEvent.clear(box);
-    await userEvent.type(box, "Paid in November");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(puts(calls)).toHaveLength(1));
-    expect(puts(calls)[0].body).toEqual({ source: "user", summary: "Paid in November", key_facts: [], replace: true });
-    expect(await screen.findByText("Paid in November")).toBeInTheDocument();
-  });
-
   it("with AI off there is no AI button, only the hint", async () => {
     setup(NONE, { ...STATUS_ON, enabled: false, switched_on: false });
     // switched off (the key is there): the hint points at the switch
     expect(await screen.findByText(/Turn on AI/)).toHaveTextContent("Activity → AI, or dam ai --on");
     expect(screen.queryByRole("button", { name: "Summarize with AI…" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Write a summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add a summary…" })).toBeInTheDocument();
   });
 
-  describe("New look: edited in place", () => {
+  describe("edited in place", () => {
     it("a click on the text opens the field; leaving it saves the user's own text, with no Edit button", async () => {
-      document.documentElement.dataset.style = "new";
       const calls = setup(USER);
       const text = await screen.findByRole("button", { name: "My own words⟨U+202E⟩" });
       expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
@@ -216,7 +202,6 @@ describe("SummaryBox", () => {
     });
 
     it("an empty summary is a placeholder to click into, not a Write a summary button; Esc and an empty field save nothing", async () => {
-      document.documentElement.dataset.style = "new";
       const calls = setup(NONE);
       await userEvent.click(await screen.findByRole("button", { name: "Add a summary…" }));
       expect(screen.queryByRole("button", { name: "Write a summary" })).toBeNull();
@@ -229,7 +214,6 @@ describe("SummaryBox", () => {
     });
 
     it("read-only: the text is plain and says why", async () => {
-      document.documentElement.dataset.style = "new";
       mockFetch({
         "GET /api/ai/status": { body: STATUS_ON },
         "GET /api/files/d1/summary": { body: USER },

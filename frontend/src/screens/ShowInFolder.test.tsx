@@ -96,7 +96,7 @@ describe("Today's Starred card", () => {
     await user.click(link);
     const preview = await screen.findByRole("region", { name: "Preview" });
     expect(await within(preview).findByText(`${DIR}/a.pdf`)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")).toHaveAttribute("aria-current", "true");
   });
 
   it("Enter on the focused name does the same", async () => {
@@ -122,7 +122,7 @@ describe("an ordinary collection", () => {
     await user.click(await within(panel).findByRole("button", { name: "Show in folder" }));
     // Browse drops select= from the address once the file is selected: check the selection
     await waitFor(() => expect(screen.getByTestId("where").textContent).toContain("/browse?path="));
-    await waitFor(() => expect(screen.getByRole("button", { name: "a.pdf" }).closest("li")).toHaveAttribute("aria-current", "true"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^a\.pdf/ }).closest("li")).toHaveAttribute("aria-current", "true"));
   });
 });
 
@@ -130,7 +130,7 @@ describe("Browse ?select=", () => {
   it("a file that is no longer in the folder: the folder opens and a message says so", async () => {
     setup(`/browse?path=${encodeURIComponent(DIR)}&select=gone`, collection({}), null);
     expect(await screen.findByText(/no longer in this folder/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "a.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^a\.pdf/ })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("where").textContent).not.toContain("select="));
   });
 });

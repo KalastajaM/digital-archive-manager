@@ -1,7 +1,7 @@
-/** Browse in the New look: Split in the header, Swap and Close on the panes' bars, New folder
+/** Browse: Split in the header, Swap and Close on the panes' bars, New folder
  * in a pane, the extra controls the stylesheet shows when the room is short (the "View" menu
  * per pane, the Details and folders buttons, the L / R tabs), This folder's columns and the
- * remembered divider between two panes. Classic renders none of them. */
+ * remembered divider between two panes. */
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -54,12 +54,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  delete document.documentElement.dataset.style;
 });
 
-describe("Browse in New, one pane", () => {
+describe("Browse, one pane", () => {
   it("offers Details and Split in the header, and View and New folder in the pane header", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     const details = screen.getByRole("button", { name: "Details" });
@@ -85,7 +83,6 @@ describe("Browse in New, one pane", () => {
   });
 
   it("the View menu holds This folder and All files below, and no collection filter", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     await user.click(within(screen.getByRole("region", { name: "Browse" })).getByRole("button", { name: "View" }));
@@ -98,7 +95,6 @@ describe("Browse in New, one pane", () => {
   });
 
   it("the view switch says This folder and All files below, with tooltips, and still switches", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     const view = within(screen.getByRole("group", { name: "View" }));
@@ -114,7 +110,6 @@ describe("Browse in New, one pane", () => {
   });
 
   it("a file row has a Relatives button beside Quick Look that opens that file's Relatives; folders have none", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse");
     await screen.findByText("a.pdf");
     expect(screen.queryByRole("button", { name: "Relatives of Money" })).not.toBeInTheDocument();
@@ -124,29 +119,10 @@ describe("Browse in New, one pane", () => {
     await user.click(rel);
     expect(await screen.findByRole("dialog", { name: /Relatives/ })).toBeInTheDocument();
   });
-
-  it("Classic has no Relatives button on rows and keeps Folders and Files", async () => {
-    setup("/browse");
-    await screen.findByText("a.pdf");
-    expect(screen.queryByRole("button", { name: "Relatives of a.pdf" })).not.toBeInTheDocument();
-    const view = within(screen.getByRole("group", { name: "View" }));
-    expect(view.getByRole("button", { name: "Folders" })).toBeInTheDocument();
-    expect(view.getByRole("button", { name: "Files" })).toBeInTheDocument();
-  });
-
-  it("Classic has none of these", async () => {
-    setup("/browse");
-    await screen.findByText("a.pdf");
-    expect(screen.queryByRole("button", { name: "Details" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "More: panes and folders" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
-    expect(document.querySelector(".pane-id")).toBeNull();
-  });
 });
 
-describe("Browse in New, two panes", () => {
+describe("Browse, two panes", () => {
   it("has a divider between the panes, L and R tabs, and the L / R marks", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse?left=&right=Money");
     await screen.findAllByText("a.pdf");
     const divider = screen.getByRole("separator", { name: "Resize the two panes" });
@@ -169,7 +145,6 @@ describe("Browse in New, two panes", () => {
   });
 
   it("Split opens the second pane, its X closes it, and Swap keeps you on your side", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse?path=Money");
     await screen.findByText("a.pdf");
     await user.click(screen.getByRole("button", { name: "Split" }));
@@ -190,7 +165,6 @@ describe("Browse in New, two panes", () => {
   });
 
   it("remembers the divider's place and a double-click resets it", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse?left=&right=Money");
     await screen.findAllByText("a.pdf");
     const divider = screen.getByRole("separator", { name: "Resize the two panes" });
@@ -206,16 +180,9 @@ describe("Browse in New, two panes", () => {
     expect(main.style.getPropertyValue("--split")).toBe("50%");
     expect(localStorage.getItem(keys[0])).toBeNull();
   });
-
-  it("Classic keeps two equal panes with no divider and no tabs", async () => {
-    setup("/browse?left=&right=Money");
-    await screen.findAllByText("a.pdf");
-    expect(screen.queryByRole("separator", { name: "Resize the two panes" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tablist", { name: "Panes" })).not.toBeInTheDocument();
-  });
 });
 
-describe("Browse in New, a long path", () => {
+describe("Browse, a long path", () => {
   const widthOf = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
   const clientOf = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
   afterEach(() => {
@@ -234,7 +201,6 @@ describe("Browse in New, a long path", () => {
   };
 
   it("folds the parents that do not fit into one menu that names them and goes there", async () => {
-    document.documentElement.dataset.style = "new";
     squeeze(330); // Archive, A, B, C is 400px: "..., B, C" fits
     const { user } = setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
     await screen.findByText("a.pdf");
@@ -252,7 +218,6 @@ describe("Browse in New, a long path", () => {
   });
 
   it("keeps only the folder you are in when nothing else fits, and everything when it all fits", async () => {
-    document.documentElement.dataset.style = "new";
     squeeze(120);
     setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
     await screen.findByText("a.pdf");
@@ -267,18 +232,9 @@ describe("Browse in New, a long path", () => {
     expect(within(all).getAllByRole("link")).toHaveLength(3);
     expect(within(all).queryByRole("button", { name: "Parent folders" })).not.toBeInTheDocument();
   });
-
-  it("Classic never folds the path", async () => {
-    squeeze(120);
-    setup("/browse?path=A%2FB%2FC", [entry("a.pdf", "f1")]);
-    await screen.findByText("a.pdf");
-    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
-    expect(within(crumbs).getAllByRole("link")).toHaveLength(3);
-    expect(within(crumbs).queryByRole("button")).not.toBeInTheDocument();
-  });
 });
 
-describe("This folder's columns (New)", () => {
+describe("This folder's columns", () => {
   const rows = [
     { ...entry("Zeta", "d2", true), mtime: 5 },
     { ...entry("Money", "d1", true), mtime: 9 },
@@ -289,7 +245,6 @@ describe("This folder's columns (New)", () => {
     [...(screen.getByRole("list", { name: "Folder contents" }).querySelectorAll(".entry-name"))].map((n) => n.textContent);
 
   it("has Name, Date and Size to sort by, folders first, and no size for a folder", async () => {
-    document.documentElement.dataset.style = "new";
     const { user } = setup("/browse", rows);
     await screen.findByText("a.pdf");
     const head = screen.getByRole("group", { name: "Sort by" });
@@ -304,17 +259,10 @@ describe("This folder's columns (New)", () => {
     expect(folder.querySelector(".entry-size")).toHaveTextContent("");
     expect(folder.querySelector(".entry-folder")).toBeNull();
   });
-
-  it("Classic keeps its plain list", async () => {
-    setup("/browse", rows);
-    await screen.findByText("a.pdf");
-    expect(screen.queryByRole("group", { name: "Sort by" })).not.toBeInTheDocument();
-  });
 });
 
 describe("Browse rows with open tray items", () => {
   it("tags a file with each open item's tray and date, as a collection's page does", async () => {
-    document.documentElement.dataset.style = "new";
     const due: DirEntry = {
       ...entry("receipt.pdf", "f2"),
       open_items: [{ item: { id: 7, tray_id: "to-action", tray_name: "To action", title: "Botox Receipt", date: "2026-10-30" }, level: "soon" }],
@@ -331,7 +279,6 @@ describe("Browse rows with open tray items", () => {
   });
 
   it("a click on the tag opens the item in its tray", async () => {
-    document.documentElement.dataset.style = "new";
     const due: DirEntry = {
       ...entry("receipt.pdf", "f2"),
       open_items: [{ item: { id: 7, tray_id: "to-action", tray_name: "To action", title: "Botox Receipt", date: null }, level: "undated" }],

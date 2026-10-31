@@ -150,7 +150,7 @@ describe("Maintenance screen", () => {
     }
     await screen.findByText(/Starting reads/);
     expect(calls.filter((c) => c.method === "POST")).toEqual([]);
-    expect(screen.getAllByRole("button", { name: /^(Find duplicates|Check)$/ })).toHaveLength(10);
+    expect(screen.getAllByRole("button", { name: "Check" })).toHaveLength(10);
   });
 
   it("says how much the duplicate check will read, with the Google Drive warning, before it starts", async () => {
@@ -175,21 +175,21 @@ describe("Maintenance screen", () => {
       },
       { duplicates: { state: "stopped" } },
     );
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     const progress = await screen.findByRole("progressbar", { name: "Progress" });
     expect(progress).toHaveAttribute("max", "10");
     await waitFor(() => expect(progress).toHaveAttribute("value", "4"));
     expect(card("Duplicates")).toHaveTextContent(/5 of 10 files \(1,0 KB of 5,0 MB\): scan\.pdf/);
     await user.click(within(card("Duplicates")).getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(posts(calls, "/api/maintenance/jobs/job-duplicates/stop")).toHaveLength(1));
-    expect(await screen.findByRole("button", { name: "Find duplicates" })).toBeInTheDocument();
+    expect(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ })).toBeInTheDocument();
   });
 
   it("leaving the screen stops a running check, so nothing keeps reading in the background", async () => {
     const { calls, user } = setup({
       "GET /api/maintenance/jobs/job-duplicates": { body: job("duplicates", { state: "running", done: 1, total: 10 }) },
     });
-    const view = screen.getByRole("button", { name: "Find duplicates" });
+    const view = within(card("Duplicates")).getByRole("button", { name: "Check" });
     await user.click(view);
     await screen.findByRole("progressbar");
     cleanup();
@@ -207,7 +207,7 @@ describe("Maintenance screen", () => {
   it("lists the groups with the suggested copy kept, and why a file stays", async () => {
     const locked = { ...GROUP, files: [...GROUP.files.slice(0, 2), file("d2", "20. Home/bill copy.pdf", { locked: "important", why: "It is marked Important, so it stays" })] };
     const { user } = setup({}, withDuplicates(locked));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     const keep = (await screen.findAllByRole("radio")) as HTMLInputElement[];
     expect(keep.map((r) => r.checked)).toEqual([true, false, false]);
     // a row shows its folder; its name only where it differs from the group's
@@ -233,7 +233,7 @@ describe("Maintenance screen", () => {
       },
       withDuplicates(GROUP),
     );
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(choose("20. Home/bill copy.pdf", "Link"));
     expect(screen.getByText("1 to To Delete, 1 replaced with a link")).toBeInTheDocument();
@@ -254,7 +254,7 @@ describe("Maintenance screen", () => {
 
   it("every copy replaced with a link says so", async () => {
     const { user } = setup({}, withDuplicates(GROUP2));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(choose("20. Home/b.pdf", "Link"));
     await user.click(screen.getByRole("button", { name: "Apply…" }));
@@ -265,7 +265,7 @@ describe("Maintenance screen", () => {
 
   it("a different copy to keep, and a copy left where it is, change the request", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     const radios = await screen.findAllByRole("radio");
     await user.click(radios[2]); // keep the copy in 20. Home
     await user.click(choose("##. Organize/scan.pdf", "Leave")); // and leave the inbox one
@@ -282,7 +282,7 @@ describe("Maintenance screen", () => {
 
   it("with every copy left where it is, Apply is off", async () => {
     const { user } = setup({}, withDuplicates(GROUP2));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(choose("20. Home/b.pdf", "Leave"));
     expect(screen.getByRole("button", { name: "Apply…" })).toBeDisabled();
@@ -290,7 +290,7 @@ describe("Maintenance screen", () => {
 
   it("with carry-over unticked the request says so and the preview carries nothing", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(screen.getByRole("checkbox", { name: /Also add what the removed copies had/ }));
     await user.click(screen.getByRole("button", { name: "Apply…" }));
@@ -301,7 +301,7 @@ describe("Maintenance screen", () => {
 
   it("the bulk Apply covers the ticked groups only, and can set all their copies to Link", async () => {
     const { calls, user } = setup({}, withDuplicates(GROUP, GROUP2));
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(screen.getByRole("checkbox", { name: "Include 20230101_bill.pdf in the bulk action" }));
     await user.click(screen.getByRole("button", { name: "Set every copy in the ticked groups to Link" }));
@@ -319,7 +319,7 @@ describe("Maintenance screen", () => {
       { "POST /api/maintenance/duplicates/resolve": { status: 400, body: { error: "20. Home/bill copy.pdf is marked Important, so it is not removed" } } },
       withDuplicates(GROUP2),
     );
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await screen.findAllByRole("radio");
     await user.click(screen.getByRole("button", { name: "Apply…" }));
     expect(await screen.findByText(/Nothing was changed: 20\. Home\/bill copy\.pdf is marked Important/)).toBeInTheDocument();
@@ -335,7 +335,7 @@ describe("Maintenance screen", () => {
       },
     };
     const { calls, user } = setup({}, { duplicates: result });
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     expect(await screen.findByText(/Probably versions of a document/)).toBeInTheDocument();
     const versions = screen.getByText("Statement.pdf", { selector: "strong" }).closest("li")!;
     // nothing is chosen for a version: its Apply waits
@@ -627,8 +627,8 @@ describe("Maintenance: folding and Reset", () => {
     expect(localStorage.getItem("dam.maintenance.folded.v1")).toBe('["empty_folders"]');
 
     await user.click(screen.getByRole("button", { name: "Collapse all" }));
-    expect(screen.queryByRole("button", { name: "Check" })).not.toBeInTheDocument();
-    expect(within(card("Broken links")).getByText("Not checked yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/Starting reads/)).not.toBeInTheDocument();
+    expect(within(card("Broken links")).getByText("Not checked yet")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Expand all" }));
     expect(within(card("Empty folders")).getByText("20. Home/Old")).toBeInTheDocument();
     expect(localStorage.getItem("dam.maintenance.folded.v1")).toBeNull();
@@ -662,7 +662,7 @@ describe("Maintenance: ignoring results", () => {
       },
       withDuplicates(GROUP),
     );
-    await user.click(await screen.findByRole("button", { name: "Find duplicates" }));
+    await user.click(await within(card("Duplicates")).findByRole("button", { name: /^Check( again)?$/ }));
     await user.click(await screen.findByRole("button", { name: "Ignore 20230101_bill.pdf" }));
     expect(posts(calls, "/api/maintenance/ignored")[0].body).toEqual({
       kind: "duplicates",

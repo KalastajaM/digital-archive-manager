@@ -1,4 +1,4 @@
-/** What the New look's inbox queue says about a file: its title, the status pill under it,
+/** What the inbox queue says about a file: its title, the status pill under it,
  * which rule suggested the filing, and the All / Bills / New filter. Everything is read
  * from the inbox list's own data (the suggestion and the scan's fields); nothing is asked
  * of the server. */

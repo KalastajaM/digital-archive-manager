@@ -26,8 +26,14 @@ if (typeof URL.createObjectURL !== "function") {
 // The app names the file manager by platform (fileManager.ts); tests read it as a Mac.
 Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
 
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
 import { resetSignedOut } from "./api/client";
+
+// The app always runs with <html data-style="new"> (public/appearance.js), which tooltips.ts
+// reads and the styles are scoped to.
+beforeEach(() => {
+  document.documentElement.dataset.style = "new";
+});
 
 // Forget keys a test pressed without releasing (keyboard.ts tracks held keys), and a 401
 // a test provoked (the page would stay on "not signed in").

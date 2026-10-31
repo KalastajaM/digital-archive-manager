@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { navigation } from "../api/client";
-import { APPEARANCE_KEY, applyStyle, STYLE_KEY } from "../appearance";
+import { APPEARANCE_KEY } from "../appearance";
 import { forgetKeptEdits } from "../components/codes/FilingCodes";
 import { mockFetch, renderWithProviders } from "../test-utils";
 import Settings from "./Settings";
@@ -28,12 +28,10 @@ function setup(path: string) {
 beforeEach(() => {
   forgetKeptEdits();
   localStorage.clear();
-  delete document.documentElement.dataset.style;
 });
 
 describe("Settings", () => {
   it("opens Filing codes first, with the sections listed by what they apply to", async () => {
-    applyStyle(); // New, as at start
     setup("/settings");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
@@ -205,45 +203,6 @@ describe("Settings", () => {
     expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
   });
 
-  it("Appearance applies the chosen theme at once and keeps it", async () => {
-    const user = setup("/settings/appearance");
-    const appearance = await screen.findByRole("region", { name: "Appearance" });
-    expect(within(appearance).getByRole("button", { name: "Auto" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(within(appearance).getByRole("button", { name: "Dark" }));
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(within(appearance).getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
-    expect(localStorage.getItem(APPEARANCE_KEY)).toBe("dark");
-    await user.click(within(appearance).getByRole("button", { name: "Light" }));
-    expect(document.documentElement.dataset.theme).toBe("light");
-  });
-
-  it("Classic leaves Senders out, and its address opens the first section", async () => {
-    localStorage.setItem(STYLE_KEY, "classic");
-    applyStyle();
-    setup("/settings/senders");
-    expect(await screen.findByRole("region", { name: "Filing codes" })).toBeInTheDocument();
-    const nav = screen.getByRole("navigation", { name: "Settings sections" });
-    expect(within(nav).queryByRole("link", { name: "Senders" })).toBeNull();
-  });
-
-  it("Appearance offers the Look: New first, Classic applies at once and New returns", async () => {
-    applyStyle(); // as at start: nothing stored, so New
-    const user = setup("/settings/appearance");
-    const appearance = await screen.findByRole("region", { name: "Appearance" });
-    const radios = within(appearance).getAllByRole("radio", { name: /^(New|Classic)/ });
-    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["new", "classic"]);
-    const [fresh, classic] = radios;
-    expect(within(appearance).getByText("The earlier look, kept for now. Relatives and Senders are in the New look only.")).toBeInTheDocument();
-    await user.click(classic);
-    expect(document.documentElement.dataset.style).toBe("classic");
-    expect(localStorage.getItem(STYLE_KEY)).toBe("classic");
-    expect(classic).toBeChecked();
-    await user.click(fresh);
-    expect(document.documentElement.dataset.style).toBe("new");
-    expect(localStorage.getItem(STYLE_KEY)).toBeNull();
-    expect(fresh).toBeChecked();
-  });
-
   it("Reset layout forgets the pane widths and Today's cards for every archive, and Undo brings them back", async () => {
     localStorage.setItem("dam.browse.listwidth", "60");
     localStorage.setItem("dam.inbox.panelwidth.other", "500");
@@ -320,17 +279,13 @@ function renderSnapshots() {
   return userEvent.setup();
 }
 
-describe("Settings Appearance in New", () => {
-  beforeEach(() => {
-    document.documentElement.dataset.style = "new";
-  });
-
-  it("arranges Look, Theme, Layout and Archive colour as separate groups under a title that says where it is kept", async () => {
+describe("Settings Appearance", () => {
+  it("arranges Theme, Layout and Archive colour as separate groups under a title that says where it is kept", async () => {
     setup("/settings/appearance");
     const section = await screen.findByRole("region", { name: "Appearance" });
     expect(within(section).getByText("Kept in this browser, the same for every archive.")).toBeInTheDocument();
     const groups = [...section.querySelectorAll("fieldset > legend")].map((l) => l.textContent);
-    expect(groups).toEqual(["Look", "Theme", "Layout", "Archive colour"]);
+    expect(groups).toEqual(["Theme", "Layout", "Archive colour"]);
     expect(within(section).getByText("Auto follows your computer's setting.")).toBeInTheDocument();
     expect(within(section).getByRole("button", { name: "Reset layout" })).toBeInTheDocument();
   });
@@ -352,15 +307,5 @@ describe("Settings Appearance in New", () => {
     expect(within(section).getByText(/Every archive except Main gets a coloured band/)).toBeInTheDocument();
     await user.click(within(section).getByRole("button", { name: "Manage archives" }));
     expect(await screen.findByRole("dialog", { name: "Manage archives" })).toBeInTheDocument();
-  });
-
-  it("keeps the Look cards in place when the look is switched there", async () => {
-    const user = setup("/settings/appearance");
-    const section = await screen.findByRole("region", { name: "Appearance" });
-    const classic = within(section).getByRole("radio", { name: /Classic/ });
-    await user.click(classic);
-    expect(document.documentElement.dataset.style).toBe("classic");
-    expect(within(section).queryByRole("radiogroup")).toBeNull();
-    expect(within(section).getByRole("radio", { name: /Classic/ })).toBe(classic);
   });
 });

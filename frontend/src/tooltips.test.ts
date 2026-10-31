@@ -36,7 +36,6 @@ describe("installTooltips", () => {
     remove();
     vi.useRealTimers();
     document.body.innerHTML = "";
-    delete document.documentElement.dataset.style;
   });
   const button = (tipText: string, attrs: Record<string, string> = {}) => {
     const b = document.createElement("button");
@@ -48,8 +47,7 @@ describe("installTooltips", () => {
   const over = (el: Element) => el.dispatchEvent(new Event("pointerover", { bubbles: true }));
   const shown = () => document.body.querySelector<HTMLElement>(".dam-tip[data-open]");
 
-  it("New: shows the tip in its own element on <body> after a short hover, and hides it on leaving", () => {
-    document.documentElement.dataset.style = "new";
+  it("shows the tip in its own element on <body> after a short hover, and hides it on leaving", () => {
     remove = installTooltips();
     const b = button("Relatives");
     over(b);
@@ -62,8 +60,7 @@ describe("installTooltips", () => {
     expect(shown()).toBeNull();
   });
 
-  it("New: keyboard focus shows it too, Escape hides it", () => {
-    document.documentElement.dataset.style = "new";
+  it("keyboard focus shows it too, Escape hides it", () => {
     remove = installTooltips();
     const b = button("Quick Look");
     b.focus();
@@ -73,20 +70,14 @@ describe("installTooltips", () => {
     expect(shown()).toBeNull();
   });
 
-  it("a disabled control shows none, and Classic draws none (its CSS box stays)", () => {
-    document.documentElement.dataset.style = "new";
+  it("a disabled control shows none", () => {
     remove = installTooltips();
     over(button("Nope", { disabled: "" }));
-    vi.advanceTimersByTime(500);
-    expect(shown()).toBeNull();
-    document.documentElement.dataset.style = "classic";
-    over(button("Classic tip"));
     vi.advanceTimersByTime(500);
     expect(shown()).toBeNull();
   });
 
   it("a refused drop target says why at once", async () => {
-    document.documentElement.dataset.style = "new";
     remove = installTooltips();
     const row = button("Not here");
     row.setAttribute("data-drop", "refused");
