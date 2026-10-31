@@ -138,6 +138,23 @@ describe("CollectionTree order", () => {
     expect(parents(calls, 4)[0].body).toEqual({ parent_id: null });
   });
 
+  it("after Alt+ArrowUp the focus stays on the tree's row, not the sidebar's for the same collection", async () => {
+    mockFetch({ "GET /api/collections": { body: LIST }, "POST /api/collections/2/move": { body: CHANGE } });
+    renderWithProviders(
+      <MemoryRouter>
+        <a href="#attic" data-collection-id="2">
+          Attic in the sidebar
+        </a>
+        <CollectionTree active={NONE} onPick={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    (await screen.findByRole("treeitem", { name: "Attic" })).focus();
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+    await new Promise((done) => setTimeout(done, 80));
+    expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: "Attic" }));
+  });
+
   it("Alt+ArrowUp on a focused row moves it up; the first one cannot", async () => {
     const { calls, user } = setup();
     await screen.findByRole("treeitem", { name: "Attic" });
