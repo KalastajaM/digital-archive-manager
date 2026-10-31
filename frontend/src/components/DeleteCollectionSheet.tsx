@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import { errorText, useDeleteCollection } from "../api/client";
 import { plural } from "../format";
+import { changeToast } from "./collectionText";
+import { useToast } from "./Toasts";
 import { visible } from "../text";
 import { Sheet } from "./ui/Sheet";
 
@@ -15,11 +17,12 @@ export function DeleteCollectionSheet({
   onCancel,
 }: {
   c: { id: number; name: string };
-  /** After the delete: how many collections went, and their names. */
+  /** After the delete (the sheet says it in a toast): how many collections went, and their names. */
   onDone: (deleted: number, names: string[]) => void;
   onCancel: () => void;
 }) {
   const { remove, preview } = useDeleteCollection();
+  const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -30,6 +33,8 @@ export function DeleteCollectionSheet({
   const go = async () => {
     try {
       const r = await remove.mutateAsync(c.id);
+      const done = r.deleted === 1 ? `Deleted ${visible(c.name)}` : `Deleted ${visible(c.name)} and the ${r.deleted - 1} inside it`;
+      toast(changeToast(done, { ...r, ongoing_status: null }));
       onDone(r.deleted, (rows ?? []).map((x) => x.name));
     } catch (e) {
       setError(errorText(e));

@@ -4,7 +4,9 @@
 import { useState } from "react";
 import { type CollectionRow, errorText, useMergeCollection } from "../api/client";
 import { visible } from "../text";
+import { changeToast } from "./collectionText";
 import { childrenOf } from "./collectionTree";
+import { useToast } from "./Toasts";
 import { Sheet } from "./ui/Sheet";
 
 export function MergeCollectionSheet({
@@ -15,11 +17,12 @@ export function MergeCollectionSheet({
 }: {
   c: { id: number; name: string };
   all: CollectionRow[];
-  /** After the merge: the collection it went into. */
+  /** After the merge (the sheet says it in a toast): the collection it went into. */
   onDone: (into: { id: number; name: string }) => void;
   onCancel: () => void;
 }) {
   const { merge, check } = useMergeCollection();
+  const toast = useToast();
   const [into, setInto] = useState<CollectionRow | null>(null);
   const [problems, setProblems] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +48,8 @@ export function MergeCollectionSheet({
   const go = async () => {
     if (!into) return;
     try {
-      await merge.mutateAsync({ id: c.id, into: into.id });
+      const r = await merge.mutateAsync({ id: c.id, into: into.id });
+      toast(changeToast(`Merged ${visible(c.name)} into ${visible(into.name)}`, r));
       onDone(into);
     } catch (e) {
       setError(errorText(e));

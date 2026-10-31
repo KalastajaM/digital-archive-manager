@@ -19,7 +19,7 @@ describe("DeleteCollectionSheet", () => {
           ],
         },
       },
-      "POST /api/collections/1/delete": { body: { deleted: 3, batch: null, problems: [] } },
+      "POST /api/collections/1/delete": { body: { deleted: 3, batch: null, problems: ["Legal/notes.txt is yours, so the folder Legal stays"] } },
     });
     const onDone = vi.fn();
     renderWithProviders(<DeleteCollectionSheet c={{ id: 1, name: "Legal" }} onDone={onDone} onCancel={() => {}} />);
@@ -33,5 +33,7 @@ describe("DeleteCollectionSheet", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections/1/delete")).toBe(true));
     // every name that went, so Browse can leave a search on any of them
     expect(onDone).toHaveBeenCalledWith(3, ["Legal", "Michiel", "Old"]);
+    // the toast says what went, and what the Ongoing sync could not do
+    expect(await screen.findByText("Deleted Legal and the 2 inside it, but: Legal/notes.txt is yours, so the folder Legal stays")).toBeInTheDocument();
   });
 });

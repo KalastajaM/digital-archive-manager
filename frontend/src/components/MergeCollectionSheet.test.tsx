@@ -32,7 +32,7 @@ const ALL = [OLD, coll(2, "Garden", 1), coll(3, "House"), coll(4, "Shut", null, 
 function setup(problems: string[] = [], all = ALL) {
   const calls = mockFetch({
     "POST /api/collections/1/merge/preview": { body: { problems } },
-    "POST /api/collections/1/merge": { body: { collection: ALL[2], batch: null, problems: [], ongoing_status: null } },
+    "POST /api/collections/1/merge": { body: { collection: ALL[2], batch: null, problems: ["Could not remove Old house/a.pdf"], ongoing_status: null } },
   });
   const onDone = vi.fn();
   renderWithProviders(<MergeCollectionSheet c={OLD} all={all} onDone={onDone} onCancel={() => {}} />);
@@ -52,6 +52,7 @@ describe("MergeCollectionSheet", () => {
     await user.click(within(sheet).getByRole("button", { name: "Merge" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/api/collections/1/merge")).toBe(true));
     expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ id: 3, name: "House" }));
+    expect(await screen.findByText("Merged Old house into House, but: Could not remove Old house/a.pdf")).toBeInTheDocument();
   });
 
   it("says what happens in ##. Ongoing by whether the target is in it", async () => {

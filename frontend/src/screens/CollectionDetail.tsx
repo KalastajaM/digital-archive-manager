@@ -1915,9 +1915,8 @@ export default function CollectionDetail({
         <DeleteCollectionSheet
           c={c}
           onCancel={() => setDeleting(false)}
-          onDone={(n) => {
+          onDone={() => {
             setDeleting(false);
-            toast({ kind: "info", text: n === 1 ? `Deleted ${c.name}` : `Deleted ${c.name} and the ${n - 1} inside it` });
             navigate("/browse?tree=collections", { replace: true });
           }}
         />
@@ -1929,7 +1928,6 @@ export default function CollectionDetail({
           onCancel={() => setMerging(false)}
           onDone={(into) => {
             setMerging(false);
-            toast({ kind: "info", text: `Merged ${c.name} into ${into.name}` });
             navigate(collectionHref(into), { replace: true });
           }}
         />

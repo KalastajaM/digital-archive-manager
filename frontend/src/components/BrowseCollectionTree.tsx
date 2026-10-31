@@ -376,9 +376,8 @@ export function CollectionTree({
         <DeleteCollectionSheet
           c={deleting}
           onCancel={() => setDeleting(null)}
-          onDone={(n, names) => {
+          onDone={(_, names) => {
             setDeleting(null);
-            toast({ kind: "info", text: n === 1 ? `Deleted ${deleting.name}` : `Deleted ${deleting.name} and the ${n - 1} inside it` });
             onDeleted?.(names);
           }}
         />
@@ -390,7 +389,6 @@ export function CollectionTree({
           onCancel={() => setMerging(null)}
           onDone={(into) => {
             setMerging(null);
-            toast({ kind: "info", text: `Merged ${merging.name} into ${into.name}` });
             onPick({ kind: "collection", name: into.name }, false);
           }}
         />

@@ -22,7 +22,7 @@ export function changeLines(result: Pick<CollectionChange, "problems" | "batch" 
 }
 
 /** The toast after a change: ``done``, or "``done``, but: <problems; status>". */
-export function changeToast(done: string, result: CollectionChange): { kind: "info" | "warning"; text: string } {
+export function changeToast(done: string, result: Pick<CollectionChange, "problems" | "batch" | "ongoing_status">): { kind: "info" | "warning"; text: string } {
   const { problems, status } = changeLines(result);
   const extra = [...problems, ...(status ? [status] : [])];
   return extra.length > 0 ? { kind: "warning", text: `${done}, but: ${extra.join("; ")}` } : { kind: "info", text: done };
