@@ -1110,13 +1110,13 @@ and cannot be moved; the others follow in the order you give them, among the col
 with the same parent. A new collection goes at the end of its siblings, and so does one
 you move into another.
 
-Drag a collection in the sidebar onto another row. The row
+Drag a collection in the sidebar or in Browse's Collections tree onto another row. The row
 has three zones. The **top third** puts the dragged collection just before the row and the
 **bottom third** just after it, shown by a line. The **middle third** puts it inside that
 collection, shown by a highlighted row. When the row belongs to another parent, the line
 moves the collection to that parent as well, at that place: that is how you take a nested
-collection back out. Dropping on the **Collections** heading in the sidebar moves it to the
-top level, as the last one. A collection cannot go inside itself or one of its own
+collection back out. Dropping on the **Collections** heading in the sidebar (or, in Browse's tree, on the strip
+that shows above the tree while you drag) moves it to the top level, as the last one. A collection cannot go inside itself or one of its own
 collections.
 
 From the keyboard, press **Alt+↑** or **Alt+↓** on a collection, or use **Move up** and
@@ -1144,6 +1144,12 @@ too, with its number of files. Starred and Important cannot be deleted.
 
 Merging and deleting cannot be undone: dam takes a snapshot first (Settings, Snapshots),
 and the sheet says so. Restoring that snapshot is the way back.
+
+Neither leaves links in `##. Ongoing` that dam no longer knows about. While the archive is
+not connected, a collection with links there is not merged or deleted. If the links cannot
+all be taken down, a delete stops with the collections closed, not deleted, and a merge
+leaves the emptied collection; try again once the problem in the toast is fixed. A delete
+is also refused if a collection was made inside since the sheet listed them.
 
 ### Groups
 
@@ -1274,7 +1280,9 @@ list's width.
   title. The same tag shows in **Files** and in search results.
 - **Folders, Collections, Tags** at the top of the tree beside the panes (New look) choose
   what the tree shows. **Folders** is the folder tree. **Collections** lists Important and
-  Starred, then the open collections as they nest. **Tags** lists the tags by group, each
+  Starred, then the open collections as they nest. After a collection's name come an orange
+  mark when `##. Ongoing` has a problem with it (hover it for what), its open checks and its
+  number of files; hover the name for its counts in words. **Tags** lists the tags by group, each
   with its number of files, under a box that narrows the list as you
   type. A click on a collection or tag lists its files from the whole archive: it is a
   search, shown as its chip (`collection:Car`, `tag:medical`), and a collection includes the
