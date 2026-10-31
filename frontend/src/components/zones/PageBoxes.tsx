@@ -114,8 +114,8 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
   const rule = ruleId ? (rules.data?.rules.find((r) => r.id === ruleId) ?? null) : null;
   // the areas behind the suggestion: shown unless the owner turned them off
   // the rule being tested, or else the suggestion's areas plus, for diagnosis, the areas of
-  // rules with a picture area that did not match (their best place and score here, or why
-  // no score could be worked out)
+  // picture rules that only their picture held back (their best place and score here, or
+  // why no score could be worked out); a rule whose words do not fit draws nothing
   const tested = useAreasFor(tool.testRule, driveId, active && tool.testRule !== undefined);
   // only an archive with a picture rule asks (the explanation is a look at every rule)
   const hasPictureRules = rules.data?.rules.some((r) => r.when.zones.some((z) => z.image)) ?? false;
@@ -125,7 +125,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
     const own = suggestion?.areas ?? [];
     const seen = new Set(own.map((a) => `${a.rule_id}:${a.index}`));
     const more = (explained.data ?? [])
-      .filter((x) => !x.matched && x.areas.some((a) => a.kind === "image"))
+      .filter((x) => x.picture_miss)
       .flatMap((x) => x.areas)
       .filter((a) => !seen.has(`${a.rule_id}:${a.index}`));
     return [...own, ...more];

@@ -105,6 +105,10 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
+- A new picture rule's areas no longer show on every other document in the Inbox. Only a
+  picture rule that its picture alone held back (its words fit the document) is drawn there
+  for diagnosis.
+
 - An open search (such as `id:*` in Browse) looks again after you mark a business ID as
   yours or name a sender, instead of showing the old results.
 - An image just over Pillow's size limit for a safe decode is left out of a PDF export, as

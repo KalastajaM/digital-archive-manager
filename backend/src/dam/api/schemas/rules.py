@@ -455,3 +455,4 @@ class RuleExplainOut(BaseModel):
     wins: list[str]
     zone_lines: list[list[str]] = []  # page-1 lines in each of the rule's zones
     areas: list[AreaOut] = []  # the rule's areas for drawing, matched or not
+    picture_miss: bool = False  # only a picture area held it back (a near miss)

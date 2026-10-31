@@ -298,6 +298,7 @@ def test_the_inbox_suggestion_names_the_folder_and_draws_the_picture_area(app, d
         mine["matched"] and mine["areas"][0]["kind"] == "image" and mine["areas"][0]["score"] > 0.9
     )
     assert mine["zone_lines"] == [[]]
+    assert mine["picture_miss"] is False  # it matched
 
 
 def test_the_inbox_says_reading_page_1_until_the_picture_is_made(app, fake_archive):
