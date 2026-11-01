@@ -50,6 +50,7 @@
 - [Locking a file](#locking-a-file)
 - [Browse](#browse)
 - [Searching](#searching)
+  - [Saved searches](#saved-searches)
 - [Tags](#tags)
 - [Relatives](#relatives)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
@@ -204,6 +205,8 @@ setting. The sidebar, from the top:
   caption for **New collection**, and a collection for the same menu as in Browse's
   Collections tree: **Open**, **New collection inside…**, **Merge into…**, **Delete…**,
   then Move up / Move down / Move out one level;
+- **Searches**: your [saved searches](#saved-searches), A to Z, each with its number of
+  matches (shown only once you have saved one);
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
   the tags you used most lately, eight at most, each opening its files in Browse.
   Right-click the caption (Pinned tags or Recent tags) for **New tag**,
@@ -212,7 +215,7 @@ setting. The sidebar, from the top:
 - **Archive**: **Ask** (AI questions about the archive), **Activity**, **Maintenance**
   (checks you start yourself), **Settings** and **Help** (this guide).
 
-Trays, Collections, Tags and Archive fold: hold the pointer on the caption and click the chevron
+Trays, Collections, Searches, Tags and Archive fold: hold the pointer on the caption and click the chevron
 at its right. A folded Trays shows its open total next to the caption. dam remembers in
 this browser which sections you folded.
 
@@ -1407,7 +1410,8 @@ list's width.
   collection's files are a search: `collection:"House sale"`.
 - **Search** looks at file names, paths and text. Beside words it takes filters such as
   `tag:medical`, `type:pdf` or `-in:"90. Other People"`; each finished filter becomes a chip in a row under the
-  pane's toolbar and the search box keeps only the words. See [Searching](#searching).
+  pane's toolbar and the search box keeps only the words. **Save search…** at the end of
+  that row keeps the search in the sidebar. See [Searching](#searching).
 - **Search results by folder.** With **Folders** selected, results are grouped under the
   folders that hold them: one header per folder with its path and the number of matches,
   folders in the order of the folder tree. The arrow at the left of a header folds the
@@ -1421,8 +1425,8 @@ list's width.
 ## Searching
 
 **⌘K** (or **Search** at the top of the sidebar) opens the search palette from any
-screen, also while typing in a field. One box finds files, folders, collections, trays and
-tags as you type; ↑ / ↓ move, Enter opens, Esc closes. Typing a filter such as `tag:` lists
+screen, also while typing in a field. One box finds files, folders, collections, trays,
+tags and saved searches as you type; ↑ / ↓ move, Enter opens, Esc closes. Typing a filter such as `tag:` lists
 its values to take with Enter or Tab. The last row searches the archive for the text as
 typed, which opens Browse with that search.
 
@@ -1465,6 +1469,32 @@ Tips:
   date that does not exist, or an unknown `is:` word, is refused with a message.
 - The whole search is in the address (`/browse?q=kela type:pdf`), so Back and a copied
   link bring the same search.
+
+### Saved searches
+
+A search you use again can be saved under a name. While Browse shows a search, the row
+under the pane's toolbar (the one with the filter chips) ends with **Save search…**: give
+it a name and **Save**. With **This folder** on, the folder is saved with it as an `in:`
+filter, so the saved search finds the same files.
+
+Saved searches are listed in the sidebar under **Searches**, A to Z, with the number of
+files each finds now (`500+` past 500). Click one to open Browse with that search; its row
+is highlighted while Browse shows it. Hover a name to see its query, which is also a
+reminder of how its filters are written. The **?** next to the search box lists your saved
+searches under the filter examples, and a click there puts the query in the box. The
+search palette (⌘K) finds saved searches by name.
+
+- **Change one**: open it, change the words or chips, and **Save search…** again. Its name
+  is filled in already; saving under it asks **Replace** before it overwrites. A new name
+  saves a second search.
+- **Rename…** and **Delete** are in the right-click menu of its row in the sidebar.
+  Delete has **Undo** in its toast. Neither touches any file.
+- A saved search whose query no longer works (a date typed by hand that does not exist)
+  shows no number; hover it for the reason.
+
+A saved search differs from a collection: a collection holds the files you put in it,
+while a saved search finds whatever matches its query now. Saved searches belong to the
+archive they were saved in.
 
 ## Tags
 
