@@ -163,6 +163,19 @@ class FileRecordOut(BaseModel):
     connected: bool = True
 
 
+class ContentChangeOut(BaseModel):
+    """A file whose content differs from what dam last knew of it."""
+
+    drive_id: str
+    path: str
+    name: str | None
+    was_size: int | None
+    was_mtime: float | None
+    size: int | None
+    mtime: float | None
+    detected_at: float
+
+
 class FileDetailOut(BaseModel):
     record: FileRecordOut
     tags: list[str]
@@ -174,6 +187,8 @@ class FileDetailOut(BaseModel):
     link_target_path: str | None
     link_target_inside: bool
     assignment: AssignmentOut | None = None  # From / For
+    # the file's content changed and the notice was not seen yet
+    content_change: ContentChangeOut | None = None
 
 
 class SummaryOut(BaseModel):

@@ -25,6 +25,7 @@ the app's sidebar).
 - [Relatives](#relatives)
 - [Safety model in detail](#safety-model-in-detail)
 - [Maintenance](#maintenance)
+- [Content changes](#content-changes)
 - [Index errors](#index-errors)
 - [Open, reveal and previews](#open-reveal-and-previews)
 - [Logs](#logs)
@@ -1841,6 +1842,32 @@ seconds, and the screen stops its running job when it is left. Jobs live in memo
 - Empty folders and broken links elsewhere are marked for deletion with `POST
   /api/quarantine`, a name is fixed with `POST /api/browse/rename`: the existing previewed
   endpoints.
+
+## Content changes
+
+The scanner notices that a file's size or mtime moved (a watcher event, or the full scan
+every 15 minutes and at start) and clears `files.sha256` so the indexer reads it again.
+Before that it keeps the old hash, size and mtime in `content_changes` (migration 0049, one
+row per file, `FileRepo.note_rewritten`). When the read gives the new hash
+(`save_content`, or `save_hash` from the duplicate check), `_settle_change` decides:
+
+- the same hash as kept, or a file directly in an inbox folder: the row goes;
+- another hash: the row gets the new hash, size and mtime and `detected_at`, and is a notice.
+
+A notice stays until it is marked as seen (`seen_at`). Until then further changes update the
+new side only, so the kept side stays the content last known, and going back to it ends the
+notice. After seen, the next change starts from the seen content. No extra reads are made:
+the check uses the reads the indexer does anyway, so nothing more is downloaded from a cloud
+drive. A file with no hash yet has no baseline and gets no notice, and bytes changed with
+size and mtime kept are not noticed. The row follows the file through `rekey` (a new Drive
+ID, a copy across disks) and goes when the file's row goes. A reconnected file starts without
+one.
+
+API: `GET /api/today` has `content_changes` (`count`, and `rows`: the newest 8, not for missing
+files or those in To Delete); `GET /api/files/{id}` has `content_change` (null without a
+notice); `POST /api/content-changes/seen` with `drive_ids` (none: every open notice) returns
+the ids that were open, for `POST /api/content-changes/unseen`. The search filter `is:changed`
+finds the same files as `rows`. This only touches `dam.sqlite`.
 
 ## Index errors
 

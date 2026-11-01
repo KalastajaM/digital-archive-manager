@@ -42,7 +42,7 @@ FILTER_NAMES = (
     "is",
 )
 
-IS_VALUES = ("starred", "important", "locked", "todo", "note", "summary", "disconnected")
+IS_VALUES = ("starred", "important", "locked", "todo", "note", "summary", "changed", "disconnected")
 
 # kind of file -> extensions (lower case, no dot); any other word is taken as an extension
 TYPE_GROUPS: dict[str, tuple[str, ...]] = {

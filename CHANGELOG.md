@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Changed files.** dam tells you when a file's content is no longer what it was: a
+  **Changed files** section on Today (only there while something changed), a line in the
+  file's panel and the search `is:changed`. It compares the content's hash from before
+  and after, so a touched, moved or renamed file gets no notice. **Mark as seen** and **Mark
+  all seen** have Undo and leave the file alone. New table `content_changes` (migration
+  0049) and endpoints under `/api/content-changes`.
 - **Saved searches.** **Save search…** in Browse's filter row keeps the search under a
   name. They are listed in the sidebar under **Searches** with the number of files each
   finds now (up to 500+); a click opens Browse with the search, and the row's tooltip

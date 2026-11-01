@@ -209,7 +209,7 @@ def test_migration_0046_adds_the_name_column_and_table(tmp_path, new_engine):
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(identifier_names)"))]
         row = conn.execute(text("SELECT value, name FROM file_identifiers")).one()
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0048"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0049"
     assert cols == ["kind", "value", "name", "set_by", "set_at"]
     assert tuple(row) == ("0112038-9", None)
 
