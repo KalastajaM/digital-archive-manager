@@ -53,6 +53,7 @@
   - [Saved searches](#saved-searches)
 - [Tags](#tags)
 - [Relatives](#relatives)
+- [Versions](#versions)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
 - [Maintenance](#maintenance)
@@ -1703,6 +1704,48 @@ like relatives: tick them to tag, collect, move or link, open Quick Look to comp
 them **Not related**. They are not saved as relatives; the answer is kept for later, so
 pressing the button again for the same files shows it as **from earlier** at no cost.
 
+## Versions
+
+When you save a document under a new name, on purpose or because the file was locked, the
+old name stays in the folder and is easy to open by mistake. dam spots such files and shows
+which one is the latest.
+
+Select a file that has a newer version and a notice under its name says so: **Newer version:**
+with the file's name, which goes to it in Browse, and the date. The **Versions** block, above
+Relatives, lists all of them, newest first, with **Latest**, **This file** and **Archived**
+(in the subfolder below) where they apply. Click a name to go to that file in Browse;
+this leaves a collection or tray. The eye icon opens it in Quick Look without leaving.
+
+**What counts as a version.** Word, Excel, PowerPoint, OpenDocument, Pages, Numbers, Keynote,
+RTF, text and Markdown files of the same kind, in one folder or its older-versions
+subfolder, whose names differ only by a date at the start or end, a number at the end, or a word
+at the end such as `v2`, `final`, `draft`, `copy`, `updated` or `luonnos`. `Offer.docx`,
+`Offer v2.docx` and `20260115_Offer final (1).docx` are versions of one document. A date in
+the middle of a name keeps files apart. Nothing is read from inside the files.
+
+PDFs, scans, mail and pictures never count: their similar names are mostly different
+documents, such as a bill every month. Files in the inbox, To Delete, Ongoing and Important
+are left out, and so are links.
+
+**Latest** means last changed on disk, not the date in the name. If you went back and edited
+an older file, that one is the latest, and the dates in the list show why.
+
+**Not a version.** Names can mislead: a monthly report in Word looks like a version too. The
+crossed eye on a row says the two files are not versions of each other, and **None of these
+are versions** says it for all of them at once, each with **Undo**. Marks are per pair of files,
+and stay when a file moves or is renamed. **N marked not versions** under the list shows
+them, with **Show again**.
+
+**Moving older versions.** dam cannot warn you about a file you open from Finder, but it can
+clear the folder so that only the current file is there. **Move N older to Archive…** shows
+the usual preview and moves the older files into an `Archive` subfolder of their folder, as
+one batch with one **Undo**. dam never does this by itself. The folder is made if needed, a
+name already taken gets `_2`, and if there is a `_Archive` folder and no `Archive`, that one is
+used. Tags, collections, marks and tray items stay with the files, and the files still show in
+the list. Locked and Important files stay where they are, and so do files in an archive folder
+that is not connected; the block names them. At the top of the archive there is nothing to
+move into, so the button is greyed. The folder's name is a setting (see [Settings](#settings)).
+
 ## Quick Look and the viewer window
 
 **Space** opens the selected document nearly full window: zoom (the buttons, ⌘-scroll,
@@ -1896,7 +1939,10 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
     **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
-    To Delete folders, each with **Rename**. **Expired folder** is the name of the folder
+    To Delete folders, each with **Rename**. **Older versions folder** is the name of the subfolder that
+    **Move N older** moves files into (`Archive` unless you change it; see
+    [Versions](#versions)). Changing it renames nothing: a folder under the old name stays, and
+    its files then no longer count as versions. **Expired folder** is the name of the folder
     that **Renewed…** moves an old file into (`Expired` unless you change it); it applies
     from the next renewal and renames nothing already made. It cannot start with `##.`,
     cannot be the name of a special folder, and follows the usual folder name rules.
@@ -2219,7 +2265,7 @@ You can give them other names, for example `00. Inbox`:
    folder name, the settings, the rules and the index paths back.
 
 A name may start with `##.` but need not. It cannot be the name of another special folder,
-of an archive folder, of the Expired folder (rename that one in Settings first), or of
+of an archive folder, of the Expired folder or the older versions folder (rename those in Settings first), or of
 anything already there. To Delete exists once in every archive
 folder; renaming it renames them all, so every archive folder must be connected. dam refuses
 the rename while a move or another job is running, when the archive's disk is not connected,

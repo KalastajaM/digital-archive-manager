@@ -4777,6 +4777,14 @@ main:has(> .settings) { container: settings / inline-size; }
 
 /* Relatives: the files a document belongs with, in the details panel (RelativesBlock.tsx) */
 .relatives { margin: var(--sp-3) 0; container-type: inline-size; }
+.versions-notice { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); background: var(--orange-bg); border-radius: var(--r-md); overflow-wrap: anywhere; min-width: 0; }
+.version-row { display: flex; align-items: center; gap: 6px; padding: 4px var(--sp-2); min-width: 0; flex-wrap: wrap; }
+.version-name { flex: 1 1 100%; min-width: 0; font-weight: 500; color: inherit; overflow-wrap: anywhere; }
+.version-date { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.version-tools { display: inline-flex; flex: none; gap: 2px; margin-left: auto; }
+.version-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: 0 var(--sp-2); }
+.version-actions button { max-width: 100%; white-space: normal; text-align: left; }
+.version-hidden { align-self: flex-start; padding: 0 var(--sp-2); }
 .relatives .collapsible-head h3 { text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-xs); }
 .relatives-count { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .relatives-body { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }

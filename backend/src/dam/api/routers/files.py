@@ -35,6 +35,7 @@ from dam.api.schemas import (
     ScanFieldsIn,
     ScanFieldsOut,
     TextPreviewOut,
+    VersionsOut,
 )
 from dam.app import App
 from dam.errors import InvalidRequest, NotFound
@@ -241,6 +242,36 @@ def restore_relative(app: AppDep, drive_id: str, body: RelativeMarkIn) -> dict:
     live_record(app, drive_id)
     app.relatives.restore(drive_id, body.drive_id)
     return {"dismissed": [asdict(d) for d in app.relatives.dismissed(drive_id)]}
+
+
+@router.get("/{drive_id}/versions", response_model=VersionsOut)
+def file_versions(app: AppDep, drive_id: str) -> dict:
+    """The versions of this document as this file sees them, newest first, with where the
+    older ones can move. No files when it has none. 404 for an unknown or missing file."""
+    return asdict(app.versions.of(drive_id))
+
+
+@router.get("/{drive_id}/versions/dismissed", response_model=RelativesDismissedOut)
+def file_versions_dismissed(app: AppDep, drive_id: str) -> dict:
+    """The files marked "Not a version" of this one (that still exist)."""
+    live_record(app, drive_id)
+    return {"dismissed": [asdict(d) for d in app.versions.dismissed(drive_id)]}
+
+
+@router.post("/{drive_id}/versions/dismiss", response_model=RelativesDismissedOut)
+def dismiss_version(app: AppDep, drive_id: str, body: RelativeMarkIn) -> dict:
+    """Mark the two files "Not a version". Answers the files now marked for this one."""
+    live_record(app, drive_id)
+    app.versions.dismiss(drive_id, body.drive_id)
+    return {"dismissed": [asdict(d) for d in app.versions.dismissed(drive_id)]}
+
+
+@router.post("/{drive_id}/versions/restore", response_model=RelativesDismissedOut)
+def restore_version(app: AppDep, drive_id: str, body: RelativeMarkIn) -> dict:
+    """Take the "Not a version" mark off the pair again. Answers the files still marked."""
+    live_record(app, drive_id)
+    app.versions.restore(drive_id, body.drive_id)
+    return {"dismissed": [asdict(d) for d in app.versions.dismissed(drive_id)]}
 
 
 @router.get("/{drive_id}/summary", response_model=FileSummaryOut)

@@ -125,6 +125,7 @@ export type FileSuggestions = Schemas["FileSuggestionsOut"];
 // Relatives: the files a document belongs with
 export type Relatives = Schemas["RelativesOut"];
 export type Relative = Schemas["RelativeOut"];
+export type VersionFile = Schemas["VersionFileOut"];
 export type RelativeLink = Schemas["RelativeLinkOut"];
 export type RelativeKind = RelativeLink["kind"];
 export type RelativeDismissed = Schemas["RelativeDismissedOut"];
@@ -1459,6 +1460,39 @@ export const useRelativeMark = () => {
   });
 };
 
+const versionsKey = (driveId: string) => [...keys.file, "versions", driveId] as const;
+
+/** The versions of a document as this file sees them (none: no ``files``). */
+export const useVersions = (driveId: string) =>
+  useQuery({
+    queryKey: versionsKey(driveId),
+    queryFn: ({ signal }) => apiGet("/api/files/{drive_id}/versions", { path: { drive_id: driveId }, signal }),
+  });
+
+/** The files marked "Not a version" of this one. */
+export const useVersionsDismissed = (driveId: string) =>
+  useQuery({
+    queryKey: [...versionsKey(driveId), "dismissed"],
+    queryFn: ({ signal }) =>
+      apiGet("/api/files/{drive_id}/versions/dismissed", { path: { drive_id: driveId }, signal }),
+  });
+
+/** Mark a pair "Not a version", or take the mark off. */
+export const useVersionMark = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, other, mark }: { driveId: string; other: string; mark: "dismiss" | "restore" }) =>
+      apiPost(mark === "dismiss" ? "/api/files/{drive_id}/versions/dismiss" : "/api/files/{drive_id}/versions/restore", {
+        path: { drive_id: driveId },
+        body: { drive_id: other },
+      }),
+    onSettled: (_data, _error, vars) => {
+      void client.invalidateQueries({ queryKey: versionsKey(vars.driveId) });
+      void client.invalidateQueries({ queryKey: versionsKey(vars.other) });
+    },
+  });
+};
+
 /** A link to one file in each of several folders, as one batch (one Undo). */
 export const useLinkThere = () => {
   const refresh = useRefresh();
@@ -1559,6 +1593,23 @@ export const useSetExpiredFolder = () => {
     mutationFn: (name: string) => apiPut("/api/settings/expired-folder", { body: { name } }),
     onSuccess: (data) => client.setQueryData(["expired-folder"], data),
     onSettled: () => client.invalidateQueries({ queryKey: ["expired-folder"] }),
+  });
+};
+
+export const useVersionsFolder = (enabled = true) =>
+  useQuery({
+    queryKey: ["versions-folder"],
+    queryFn: ({ signal }) => apiGet("/api/settings/versions-folder", { signal }),
+    enabled,
+  });
+
+/** Rename the subfolder for older versions; the server refuses a name that cannot be used. */
+export const useSetVersionsFolder = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => apiPut("/api/settings/versions-folder", { body: { name } }),
+    onSuccess: (data) => client.setQueryData(["versions-folder"], data),
+    onSettled: () => client.invalidateQueries({ queryKey: ["versions-folder"] }),
   });
 };
 

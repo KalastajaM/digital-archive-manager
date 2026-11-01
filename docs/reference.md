@@ -1026,6 +1026,11 @@ folder name: the usual folder-name rules, not starting with `##.`, not the name 
 special folder (the Inbox, Ongoing, Important or To Delete). It is a setting only; no
 existing folder is renamed. 400 with the reason otherwise.
 
+`GET /api/settings/versions-folder` and `PUT` do the same for `versions_folder_name` (default
+`Archive`), the subfolder older versions move to (see [Versions](#versions)). The default
+never stops settings from loading, even when a special folder is called Archive; a name set
+by hand is refused as above.
+
 The move of an item between trays is `POST /api/items/{id}/move`, and its undo
 `POST /api/items/{id}/undo-move` (only while the move is the item's latest change).
 
@@ -1509,6 +1514,43 @@ task). Only on a click, after the preview.
   `find-relatives` 2000. The worst-case estimate is the input ÷ 3.5 characters at the model's
   price plus 1000 output tokens, checked against the budget as for the other tasks.
 - Nothing is written to the archive, and a pick is not stored as a relative.
+
+## Versions
+
+`dam.services.versions`. A file's group is worked out from the index on each request; nothing
+is stored but the marks.
+
+**Candidates.** Regular files (no link or folder, not missing or parked), outside the inbox,
+To Delete and the publish roots, of an editable type. Families: `doc docx`, `xls xlsx`,
+`ppt pptx`, and alone `odt ods odp pages numbers key rtf txt md`.
+
+**Place.** A file's folder F is its parent, or the parent's parent when the parent is called
+`versions_folder_name` or that name with a leading `_` (compared with `fold_name`) and F is a
+real folder: not the top of the archive or of an extra archive folder.
+
+**Name key** (`version_key`). The stem in NFC and casefolded. Dates `YYYY-MM-DD`, `DD.MM.YYYY`
+and `DD-MM-YYYY` become one token, then spaces, `_`, `-` and `.` split the name. A leading date
+(`YYYYMMDD`, `YYMMDD`) and a leading `copy of` go. From the end go, repeatedly: a date, `(n)`, a
+number of one or two digits, and the words `v ver version versio rev revised draft luonnos
+concept final lopullinen new uusi old vanha copy kopio korjattu edit edited updated latest
+redline`, each with an optional number. A key under 3 characters makes no group.
+
+**Group.** The files with the same F, family and key, without those marked for this file. Marks
+are per pair, so a group belongs to the file asked about and is not transitive. Under 2 files:
+no group. Newest first by `mtime` (null last), ties by longer name, then path.
+
+`GET /api/files/{id}/versions` answers `{files, latest, hidden, folder, movable, staying,
+blocked}`. Each of `files` has `drive_id, path, name, mtime, latest, in_archive`. `folder` is the
+destination (`F/<name>`, or an existing `F/_<name>` when `F/<name>` is not there), null at the
+top. `movable` holds the older files directly in F that are neither locked nor in a folder
+that is not connected, `staying` the others as `{name, reason}`, `blocked` why nothing can
+move. The move itself is `POST /api/browse/move` with `movable` and `folder`. 404 for an
+unknown, missing or parked file.
+
+**Marks.** Table `version_dismissed(drive_a, drive_b, created)` (migration 0049), like
+`related_dismissed`: `drive_a` the smaller id, no foreign keys, so a mark survives moves and
+renames. `GET .../versions/dismissed`, `POST .../versions/dismiss` and `POST .../versions/restore`
+(`{drive_id}`) answer `{dismissed}`. Index data only: no operation layer, no journal.
 
 ## Safety model in detail
 

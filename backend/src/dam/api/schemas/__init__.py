@@ -135,6 +135,9 @@ from dam.api.schemas.relatives import (
     RelativeOut,
     RelativesDismissedOut,
     RelativesOut,
+    VersionFileOut,
+    VersionsOut,
+    VersionStayingOut,
 )
 from dam.api.schemas.requests import (
     ApplyTrayDefaultsIn,
@@ -746,6 +749,9 @@ __all__ = [
     "RelativeOut",
     "RelativesDismissedOut",
     "RelativesOut",
+    "VersionFileOut",
+    "VersionStayingOut",
+    "VersionsOut",
     "FolderRenameIn",
     "FolderRenameOut",
     "SpecialFolderPlaceOut",

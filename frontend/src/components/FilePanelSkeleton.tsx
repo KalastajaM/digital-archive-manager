@@ -9,9 +9,10 @@
  *  6. group        a collection's Group
  *  7. summary
  *  8. own          anything else a screen has
- *  9. relatives    foldable
- * 10. preview
- * 11. notes
+ *  9. versions     foldable, only when the document has versions
+ * 10. relatives    foldable
+ * 11. preview
+ * 12. notes
  *
  * A screen fills the blocks it has; a block left empty is not drawn, and a screen cannot
  * reorder them (the keyboard order is the DOM order). */

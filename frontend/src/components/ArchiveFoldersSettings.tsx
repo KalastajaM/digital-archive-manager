@@ -16,6 +16,7 @@ import {
 } from "../api/client";
 import { visible } from "../text";
 import { ExpiredFolderSettings } from "./ExpiredFolderSettings";
+import { VersionsFolderSettings } from "./VersionsFolderSettings";
 import { FolderPathInput } from "./FolderPathInput";
 import { RelabelSheet } from "./RelabelSheet";
 import { SpecialFoldersSettings } from "./SpecialFoldersSettings";
@@ -265,6 +266,7 @@ export function ArchiveFoldersSettings() {
       {adding && <AddSheet onClose={() => setAdding(false)} onDone={changed} />}
       <SpecialFoldersSettings />
       <ExpiredFolderSettings />
+      <VersionsFolderSettings />
       {relabelling && (
         <RelabelSheet
           folder={relabelling}
