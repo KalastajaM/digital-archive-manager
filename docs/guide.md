@@ -1745,7 +1745,7 @@ When you save a document under a new name, on purpose or because the file was lo
 old name stays in the folder and is easy to open by mistake. dam spots such files and shows
 which one is the latest.
 
-Select a file that has a newer version and a notice under its name says so: **Newer version:**
+Select a file with a newer version and a notice under its name says so: **Newer version:**
 with the file's name, which goes to it in Browse, and the date. The **Versions** block, above
 Relatives, lists all of them, newest first, with **Latest**, **This file** and **Archived**
 (in the subfolder below) where they apply. Click a name to go to that file in Browse;
@@ -1763,7 +1763,9 @@ documents, such as a bill every month. Files in the inbox, To Delete, Ongoing an
 are left out, and so are links.
 
 **Latest** means last changed on disk, not the date in the name. If you went back and edited
-an older file, that one is the latest, and the dates in the list show why.
+an older file, that one is the latest, and the dates in the list show why. A copy that keeps
+the original's date gets no notice, as neither file is newer; one of the two is still marked
+**Latest** (the longer name).
 
 **Not a version.** Names can mislead: a monthly report in Word looks like a version too. The
 crossed eye on a row says the two files are not versions of each other, and **None of these
@@ -1976,8 +1978,8 @@ each area, grouped by what it applies to; one section shows at a time.
     **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
     To Delete folders, each with **Rename**. **Older versions folder** is the name of the subfolder that
     **Move N older** moves files into (`Archive` unless you change it; see
-    [Versions](#versions)). Changing it renames nothing: a folder under the old name stays, and
-    its files then no longer count as versions. **Expired folder** is the name of the folder
+    [Versions](#versions)). Changing it renames nothing: a folder under the old name stays and
+    becomes an ordinary folder: its files no longer join the versions in the folder above. **Expired folder** is the name of the folder
     that **Renewed…** moves an old file into (`Expired` unless you change it); it applies
     from the next renewal and renames nothing already made. It cannot start with `##.`,
     cannot be the name of a special folder, and follows the usual folder name rules.

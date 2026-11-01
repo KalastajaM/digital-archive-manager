@@ -152,7 +152,7 @@ class VersionsService:
 
     def _is_root(self, folder: str) -> bool:
         """The top of the archive or of an extra archive folder: never given a subfolder."""
-        return not folder or self.paths.label_of(folder) == folder
+        return not folder or fold_name(self.paths.label_of(folder)) == fold_name(folder)
 
     def _is_archive_name(self, name: str) -> bool:
         wanted = fold_name(self.folder_name())
@@ -166,6 +166,8 @@ class VersionsService:
 
     def _considered(self, rec: FileRecord) -> bool:
         if rec.is_dir or rec.is_link or type_family(rec.ext) is None:
+            return False
+        if (rec.name or "").startswith("."):  # ``._Offer.docx``: not the owner's document
             return False
         path = rec.path_nfc
         own = [*self.paths.quarantines, *self.paths.publish_roots, self.paths.inbox]
@@ -243,7 +245,7 @@ class VersionsService:
         if self._is_root(home):
             out.blocked = "These files are at the top of the archive, in no folder"
             return
-        out.folder = self._destination(group[0].path, home, folder_name, nearby)
+        out.folder = self._destination(home, folder_name, nearby)
         entries = self.locks.entries()
         granted = self.locks.granted(request_tokens())
         for r in older:
@@ -264,11 +266,9 @@ class VersionsService:
             else:
                 out.blocked = f"The older versions are already in {folder_name}"
 
-    def _destination(
-        self, spelled: str, home: str, folder_name: str, nearby: list[FileRecord]
-    ) -> str:
-        """``F/<name>``, or the ``F/_<name>`` that is already there when ``F/<name>`` is not.
-        Spelled as on disk where the folder exists; ``F`` as in the path of a group's file."""
+    def _destination(self, home: str, folder_name: str, nearby: list[FileRecord]) -> str:
+        """``F/<name>``, or the ``F/_<name>`` that is already there when ``F/<name>`` is not;
+        an existing folder spelled as on disk."""
         wanted = fold_name(folder_name)
         dirs = {
             fold_name(r.name or ""): r.path

@@ -59,6 +59,16 @@ describe("the notice", () => {
     expect(notice.textContent).toMatch(/^Newer version: Lease final \(1\)\.docx, /);
   });
 
+  it("is not shown when the latest has the same date, as for a copy", async () => {
+    const same = [
+      file("d3", "Lease copy.docx", 1759000000, { latest: true }),
+      file("d0", "Lease.docx", 1759000000),
+    ];
+    block(body({ files: same }));
+    await screen.findByText("Versions");
+    expect(screen.queryByText(/^Newer version:/)).toBeNull();
+  });
+
   it("is not shown on the latest", async () => {
     block(body(), {}, "d3");
     await screen.findByText("Versions");
@@ -109,7 +119,12 @@ describe("the block", () => {
 
   it("names the files that stay", async () => {
     block(body({ movable: ["d1"], staying: [{ name: "Lease final.docx", reason: "locked" }] }));
-    expect(await screen.findByText(/1 file will stay: Lease final\.docx \(locked\)/)).toBeTruthy();
+    expect(await screen.findByText(/1 file stays: Lease final\.docx \(locked\)/)).toBeTruthy();
+  });
+
+  it("names the files that stay when none can move", async () => {
+    block(body({ movable: [], blocked: "The older versions are locked", staying: [{ name: "Lease.docx", reason: "locked" }] }));
+    expect(await screen.findByText(/1 file stays: Lease\.docx \(locked\)/)).toBeTruthy();
   });
 
   it("marks a pair not a version, with Undo", async () => {

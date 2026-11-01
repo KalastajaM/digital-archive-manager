@@ -2864,7 +2864,10 @@ export function useFileLock(driveId: string, marks?: readonly Mark[], path?: str
       pending.current -= 1;
     }
   };
-  const refresh = () => client.invalidateQueries({ queryKey: keys.locks });
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: [...keys.file, "versions"] }); // what can move changes
+    return client.invalidateQueries({ queryKey: keys.locks });
+  };
 
   // leaving the file locks it again, here and on the server
   useEffect(() => {

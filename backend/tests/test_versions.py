@@ -106,6 +106,14 @@ def test_no_group_for_a_file_alone_or_a_pdf(app, fake_archive):
     assert app.versions.of("b").files == []
 
 
+def test_a_hidden_sidecar_is_not_a_version(app, fake_archive):
+    add(fake_archive, f"{F}/Offer.docx", "a", 100)
+    add(fake_archive, f"{F}/._Offer.docx", "b", 100)
+    app.scan()
+    assert app.versions.of("a").files == []
+    assert app.versions.of("b").files == []
+
+
 def test_latest_is_mtime_not_name_date(app, fake_archive):
     add(fake_archive, f"{F}/20170122_Plan.docx", "a", 300)
     add(fake_archive, f"{F}/20170212_Plan.docx", "b", 200)

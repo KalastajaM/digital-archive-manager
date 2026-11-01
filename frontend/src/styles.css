@@ -4783,7 +4783,8 @@ main:has(> .settings) { container: settings / inline-size; }
 .version-date { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .version-tools { display: inline-flex; flex: none; gap: 2px; margin-left: auto; }
 .version-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: 0 var(--sp-2); }
-.version-actions button { max-width: 100%; white-space: normal; text-align: left; }
+.version-actions button { max-width: 100%; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.version-staying { margin: 0; padding: 0 var(--sp-2); overflow-wrap: anywhere; }
 .version-hidden { align-self: flex-start; padding: 0 var(--sp-2); }
 .relatives .collapsible-head h3 { text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-xs); }
 .relatives-count { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }

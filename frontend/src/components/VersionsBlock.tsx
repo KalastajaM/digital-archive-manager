@@ -23,7 +23,10 @@ const dated = (mtime: number | null) => (mtime === null ? "" : shortDate(mtime))
 export function VersionsNotice({ driveId }: { driveId: string }) {
   const { data } = useVersions(driveId);
   const latest = data?.files.find((f) => f.latest);
+  const self = data?.files.find((f) => f.drive_id === driveId);
   if (!latest || latest.drive_id === driveId) return null;
+  // a copy keeps its date: the same time is not newer, though one of them is marked Latest
+  if (self?.mtime != null && latest.mtime != null && latest.mtime <= self.mtime) return null;
   const name = visible(latest.name);
   const date = dated(latest.mtime);
   return (
@@ -141,9 +144,9 @@ export function VersionsBlock({ driveId }: { driveId: string }) {
             </button>
           </div>
         )}
-        {data.staying.length > 0 && data.movable.length > 0 && (
-          <p className="hint">
-            {plural(data.staying.length, "file")} will stay:{" "}
+        {data.staying.length > 0 && (
+          <p className="hint version-staying">
+            {data.staying.length === 1 ? "1 file stays" : `${data.staying.length} files stay`}:{" "}
             {data.staying.map((s) => `${visible(s.name)} (${s.reason})`).join(", ")}
           </p>
         )}

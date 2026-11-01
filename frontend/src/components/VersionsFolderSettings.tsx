@@ -15,7 +15,7 @@ export function VersionsFolderSettings() {
   return (
     <section aria-labelledby="versions-folder-heading">
       <h3 id="versions-folder-heading">Older versions folder</h3>
-      <p className="hint">Older versions of a file move to this folder inside the file's own folder, when you ask. Changing the name moves nothing: a folder under the old name stays, and its files no longer count as versions.</p>
+      <p className="hint">Older versions of a file move to this folder inside the file's own folder, when you ask. Changing the name moves nothing: a folder under the old name stays and becomes an ordinary folder: its files no longer join the versions in the folder above.</p>
       {current.isError && (
         <p className="error" role="alert">
           Could not load the name: {visible(errorText(current.error))}
