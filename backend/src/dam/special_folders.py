@@ -200,6 +200,11 @@ def check_name(key: str, raw: str, paths: ArchivePaths) -> str:
             "That name is the Expired folder's name. Choose another or rename the Expired "
             "folder in Settings first."
         )
+    if fold_name(clean) == fold_name(settings.versions_folder_name):
+        raise InvalidRequest(
+            "That name is the name of the folder for older versions. Choose another or rename "
+            "that folder in Settings first."
+        )
     if fold_name(clean) != fold_name(old):  # a change of letter case alone is the same folder
         for root in _roots(key, paths):
             if _taken(root, clean):

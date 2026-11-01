@@ -1,3 +1,5 @@
+import { withoutMarks } from "./text";
+
 /** The filters of the search box: ``tag:medical``, ``in:"50. Medical"``, ``-tag:paid``.
  *
  * The backend (``dam.query``) is the one that understands them; this reads the same text
@@ -179,8 +181,7 @@ const PHRASE_MAX_CHARS = 200;
  * go, or ``Name: x`` inside the quotes would read as a filter (search ignores punctuation
  * anyway), and so do the marks shown for hidden characters. A long selection is cut at a word. */
 export function phraseQuery(selected: string): string {
-  let words = selected
-    .replace(/⟨U\+[0-9A-F]+⟩/g, "")
+  let words = withoutMarks(selected)
     .replace(/["：:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

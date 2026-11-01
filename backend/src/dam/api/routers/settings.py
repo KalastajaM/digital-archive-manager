@@ -58,6 +58,19 @@ def get_expired_folder(app: AppDep) -> dict:
     return {"name": app.settings.expired_folder_name}
 
 
+@router.get("/versions-folder", response_model=ExpiredFolderOut)
+def get_versions_folder(app: AppDep) -> dict:
+    """The name of the subfolder older versions of a file move to."""
+    return {"name": app.settings.versions_folder_name}
+
+
+@router.put("/versions-folder", response_model=ExpiredFolderOut)
+def put_versions_folder(app: AppDep, body: ExpiredFolderIn) -> dict:
+    """Rename that subfolder (setting only; no folder is moved). 400 with the reason for a
+    name that cannot be a folder name or is one of the app's own folders."""
+    return {"name": app.set_versions_folder(body.name)}
+
+
 @router.put("/expired-folder", response_model=ExpiredFolderOut)
 def put_expired_folder(app: AppDep, body: ExpiredFolderIn) -> dict:
     """Rename the Expired folder (setting only; no folder is moved). 400 with the reason

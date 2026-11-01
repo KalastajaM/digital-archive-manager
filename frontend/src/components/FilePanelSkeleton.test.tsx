@@ -23,6 +23,7 @@ describe("FilePanelSkeleton", () => {
       "group",
       "summary",
       "own",
+      "versions",
       "relatives",
       "preview",
       "notes",

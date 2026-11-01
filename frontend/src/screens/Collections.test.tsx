@@ -226,7 +226,7 @@ describe("Collection detail", () => {
     const inspector = within(panel()).getByRole("complementary", { name: "Selected file" });
     await within(inspector).findByRole("region", { name: "Tags" });
     const blocks = Array.from(inspector.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "actions", "tags", "collections", "group", "summary", "relatives", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "group", "summary", "versions", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => inspector.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("collections")).getByRole("combobox", { name: "Add to collection" })).toBeInTheDocument();
     expect(within(inBlock("group")).getByRole("region", { name: "In this collection" })).toBeInTheDocument();

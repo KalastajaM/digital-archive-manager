@@ -8,6 +8,11 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Versions.** A file's panel says when a newer version of the document exists and lists the
+  versions, with the latest marked (Word, Excel, PowerPoint, OpenDocument, Pages, Numbers,
+  Keynote, RTF, text and Markdown files in one folder, by name; latest means last changed on
+  disk). **Not a version** takes out a false match. **Move N older to Archive…** moves the older
+  ones into a subfolder, with a preview and Undo; its name is a setting in Archive folders.
 - **Changed files.** dam tells you when a file's content is no longer what it was: a
   **Changed files** section on Today (only there while something changed), a line in the
   file's panel and the search `is:changed`. It compares the content's hash from before
@@ -15,8 +20,9 @@ All notable changes are listed here. The format follows
   all seen** have Undo and leave the file alone. New table `content_changes` (migration
   0049) and endpoints under `/api/content-changes`.
 - **Show text** in a file's preview toolbar shows the text read from the file, OCR
-  included, so it can be selected and copied (⌘C or the right-click menu). **Search for
-  selection** finds the files with the selected text as a phrase. New endpoint
+  included, so it can be selected and copied. **Search for selection** finds the files with the
+  selected text as a phrase. Its right-click menu has **Copy**, **Search for selection**,
+  **Select all** and **Show page**. New endpoint
   `GET /api/files/{drive_id}/indexed-text`.
 - **Saved searches.** **Save search…** in Browse's filter row keeps the search under a
   name. They are listed in the sidebar under **Searches** with the number of files each
@@ -41,6 +47,9 @@ All notable changes are listed here. The format follows
 - A tray row and a bill on Today show ★ when one of the item's files is starred. The file
   stays in Starred as well. **Remove the star** is in the item's right-click menu, on Today
   and in Trays.
+- A preview no longer draws the areas of a picture rule that did not match. A rule with
+  only a picture area drew them on every file in the Inbox. Its score and best place are
+  still in the rule's test and in **Test a document**.
 
 ## [1.0.0] - 2026-11-01
 

@@ -54,6 +54,7 @@
   - [Saved searches](#saved-searches)
 - [Tags](#tags)
 - [Relatives](#relatives)
+- [Versions](#versions)
 - [Quick Look and the viewer window](#quick-look-and-the-viewer-window)
 - [Activity and undo](#activity-and-undo)
 - [Maintenance](#maintenance)
@@ -225,8 +226,8 @@ trays, Today's tray lists and Starred, a collection's files and groups, and Rela
 right-click menu with their actions. An entry that cannot run now is greyed, with the
 reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
 that has the focus. The browser's own right-click menu is off everywhere else, except in
-text fields, where copy, paste and spelling still work, and in a file's text (**Show
-text**), for Copy. The PDF preview keeps its viewer's own menu.
+text fields, where copy, paste and spelling still work. The PDF preview keeps its
+viewer's own menu.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -794,12 +795,10 @@ inbox before the rest; a document without one is listed under **Could not be jud
 Every path in the test result is a button. It opens the document in the preview with the
 rule you are testing drawn on its first page: its areas, and for a picture area the place
 where it fits best with its score. When a picture rule finds nothing, open a letter you
-know it should match and read the score and the place the picture was found. In any
-preview with the box tool (Inbox, Browse, Quick Look, the viewer), the areas of a picture
-rule that only its picture held back (its words and other conditions fit the document) are
-drawn dashed too, with the score they got on that document, or the reason there is none (for
-example that the picture of page 1 is not made yet). A picture rule whose words do not fit
-the document draws nothing there.
+know it should match and read the score and the place the picture was found. A rule that
+did not match draws nothing in an ordinary preview; **Test a document** in Settings →
+Filing rules also shows its areas, with the score or the reason there is none (for example
+that the picture of page 1 is not made yet).
 
 The test runs in the background and fills in as it goes: "Checked 1 240 of 10 875
 documents…" with a **Stop** button. It looks at the likely documents first (the ones you
@@ -1740,6 +1739,50 @@ like relatives: tick them to tag, collect, move or link, open Quick Look to comp
 them **Not related**. They are not saved as relatives; the answer is kept for later, so
 pressing the button again for the same files shows it as **from earlier** at no cost.
 
+## Versions
+
+When you save a document under a new name, on purpose or because the file was locked, the
+old name stays in the folder and is easy to open by mistake. dam spots such files and shows
+which one is the latest.
+
+Select a file with a newer version and a notice under its name says so: **Newer version:**
+with the file's name, which goes to it in Browse, and the date. The **Versions** block, above
+Relatives, lists all of them, newest first, with **Latest**, **This file** and **Archived**
+(in the subfolder below) where they apply. Click a name to go to that file in Browse;
+this leaves a collection or tray. The eye icon opens it in Quick Look without leaving.
+
+**What counts as a version.** Word, Excel, PowerPoint, OpenDocument, Pages, Numbers, Keynote,
+RTF, text and Markdown files of the same kind, in one folder or its older-versions
+subfolder, whose names differ only by a date at the start or end, a number at the end, or a word
+at the end such as `v2`, `final`, `draft`, `copy`, `updated` or `luonnos`. `Offer.docx`,
+`Offer v2.docx` and `20260115_Offer final (1).docx` are versions of one document. A date in
+the middle of a name keeps files apart. Nothing is read from inside the files.
+
+PDFs, scans, mail and pictures never count: their similar names are mostly different
+documents, such as a bill every month. Files in the inbox, To Delete, Ongoing and Important
+are left out, and so are links.
+
+**Latest** means last changed on disk, not the date in the name. If you went back and edited
+an older file, that one is the latest, and the dates in the list show why. A copy that keeps
+the original's date gets no notice, as neither file is newer; one of the two is still marked
+**Latest** (the longer name).
+
+**Not a version.** Names can mislead: a monthly report in Word looks like a version too. The
+crossed eye on a row says the two files are not versions of each other, and **None of these
+are versions** says it for all of them at once, each with **Undo**. Marks are per pair of files,
+and stay when a file moves or is renamed. **N marked not versions** under the list shows
+them, with **Show again**.
+
+**Moving older versions.** dam cannot warn you about a file you open from Finder, but it can
+clear the folder so that only the current file is there. **Move N older to Archive…** shows
+the usual preview and moves the older files into an `Archive` subfolder of their folder, as
+one batch with one **Undo**. dam never does this by itself. The folder is made if needed, a
+name already taken gets `_2`, and if there is a `_Archive` folder and no `Archive`, that one is
+used. Tags, collections, marks and tray items stay with the files, and the files still show in
+the list. Locked and Important files stay where they are, and so do files in an archive folder
+that is not connected; the block names them. At the top of the archive there is nothing to
+move into, so the button is greyed. The folder's name is a setting (see [Settings](#settings)).
+
 ## Quick Look and the viewer window
 
 **Space** opens the selected document nearly full window: zoom (the buttons, ⌘-scroll,
@@ -1766,6 +1809,10 @@ different order. Select some text and **Search for selection** (the magnifier) o
 with it as a phrase search of whole words (a word you cut short counts whole), up to about
 200 characters; a text file has this button too.
 The viewer window has no Browse, so there you copy the text instead.
+
+Right-click the text for **Copy**, **Search for selection**, **Select all** and **Show page**
+(back to the page). **⌘A** selects this text once you have clicked in it, not the files in
+the list. What you copy leaves out the marks shown for hidden characters.
 
 ## Activity and undo
 
@@ -1933,7 +1980,10 @@ each area, grouped by what it applies to; one section shows at a time.
   - **Archive folders**: the main folder and any extra folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
     **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
-    To Delete folders, each with **Rename**. **Expired folder** is the name of the folder
+    To Delete folders, each with **Rename**. **Older versions folder** is the name of the subfolder that
+    **Move N older** moves files into (`Archive` unless you change it; see
+    [Versions](#versions)). Changing it renames nothing: a folder under the old name stays and
+    becomes an ordinary folder: its files no longer join the versions in the folder above. **Expired folder** is the name of the folder
     that **Renewed…** moves an old file into (`Expired` unless you change it); it applies
     from the next renewal and renames nothing already made. It cannot start with `##.`,
     cannot be the name of a special folder, and follows the usual folder name rules.
@@ -2256,7 +2306,7 @@ You can give them other names, for example `00. Inbox`:
    folder name, the settings, the rules and the index paths back.
 
 A name may start with `##.` but need not. It cannot be the name of another special folder,
-of an archive folder, of the Expired folder (rename that one in Settings first), or of
+of an archive folder, of the Expired folder or the older versions folder (rename those in Settings first), or of
 anything already there. To Delete exists once in every archive
 folder; renaming it renames them all, so every archive folder must be connected. dam refuses
 the rename while a move or another job is running, when the archive's disk is not connected,

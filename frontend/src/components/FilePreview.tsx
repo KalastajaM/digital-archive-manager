@@ -29,12 +29,13 @@ import {
 import { isShortcutIn, useKeydown } from "../keyboard";
 import { openViewer } from "../selection";
 import { inFileManager, showInLabel } from "../fileManager";
-import { visible, visibleText } from "../text";
+import { visible, visibleText, withoutMarks } from "../text";
 import { InlineResults, LaunchButtons, notConnected, ShowInFolderButton, useFileLaunch } from "./FileLaunch";
 import { pageSrcs, printImages } from "./print";
 import { useToast } from "./Toasts";
 import { IconButton } from "./ui/IconButton";
 import { Menu } from "./ui/Menu";
+import { useContextMenu } from "./ui/useContextMenu";
 import { usePageLink, useScrollLink } from "./moveTogether";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 import { parentOf } from "../paths";
@@ -424,60 +425,81 @@ function PreviewTools({ children }: { children: ReactNode }) {
 /** Where "Search for selection" can go: left out where there is no Browse to search in. */
 type SearchFrom = { beforeSearch?: () => void };
 
-/** Searches the archive for the text selected in ``root``, as a phrase of whole words.
- * Greyed until there is a selection there, so the row of tools does not shift. */
-function SearchSelection({ root, beforeSearch }: SearchFrom & { root: RefObject<HTMLElement | null> }) {
-  const navigate = useNavigate();
-  const [selected, setSelected] = useState("");
-  useEffect(() => {
-    const read = () => {
-      const s = document.getSelection();
-      const el = root.current;
-      if (!s || !el || s.isCollapsed || !el.contains(s.anchorNode) || !el.contains(s.focusNode)) return setSelected("");
-      const range = s.getRangeAt(0);
-      const before = document.createRange();
-      before.selectNodeContents(el);
-      before.setEnd(range.startContainer, range.startOffset);
-      const start = before.toString().length;
-      setSelected(wholeWords(el.textContent ?? "", start, start + range.toString().length));
-    };
-    document.addEventListener("selectionchange", read);
-    return () => document.removeEventListener("selectionchange", read);
-  }, [root]);
-  const q = phraseQuery(selected);
-  return (
-    <IconButton
-      icon={<Search />}
-      label="Search for selection"
-      tip="Find the files with the selected text"
-      disabled={!q}
-      disabledReason="Select some text first"
-      onClick={() => {
-        beforeSearch?.();
-        navigate(`/browse?${new URLSearchParams({ q })}`);
-      }}
-    />
-  );
+/** The selection inside ``el``, as selected and as whole words; null without one. */
+function selectionIn(el: HTMLElement | null): { text: string; words: string } | null {
+  const s = document.getSelection();
+  if (!s || !el || s.isCollapsed || !el.contains(s.anchorNode) || !el.contains(s.focusNode)) return null;
+  const range = s.getRangeAt(0);
+  const before = document.createRange();
+  before.selectNodeContents(el);
+  before.setEnd(range.startContainer, range.startOffset);
+  const start = before.toString().length;
+  const text = range.toString();
+  return { text, words: wholeWords(el.textContent ?? "", start, start + text.length) };
 }
 
-/** A file's text to select and copy (hidden characters marked), with the browser's own
- * right-click menu for Copy. ``text`` null: on its way. ``children``: notes below it. */
+const NO_SELECTION = "Select some text first";
+
+/** A file's text to select and copy (hidden characters marked, but never copied), with
+ * its own right-click menu. ``text`` null: on its way. ``onShowPage``: back to the page.
+ * ``children``: notes below it. */
 function TextFigure({
   text,
   tools,
   searchFrom,
+  onShowPage,
   children,
 }: {
   text: string | null;
   tools: ReactNode;
   searchFrom?: SearchFrom;
+  onShowPage?: () => void;
   children?: ReactNode;
 }) {
   const pre = useRef<HTMLPreElement>(null);
+  const navigate = useNavigate();
+  const toast = useToast();
+  const inline = useContext(InlineResults);
+  const menu = useContextMenu<{ copy: string; q: string }>();
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    const read = () => setQ(phraseQuery(selectionIn(pre.current)?.words ?? ""));
+    document.addEventListener("selectionchange", read);
+    return () => document.removeEventListener("selectionchange", read);
+  }, []);
+  const search = (phrase: string) => {
+    searchFrom?.beforeSearch?.();
+    navigate(`/browse?${new URLSearchParams({ q: phrase })}`);
+  };
+  const copy = async (selected: string) => {
+    try {
+      await navigator.clipboard.writeText(withoutMarks(selected));
+    } catch {
+      (inline ?? toast)({ kind: "error", text: "Could not copy the text: press ⌘C instead." });
+    }
+  };
+  const selectAll = () => {
+    if (!pre.current) return;
+    pre.current.focus({ preventScroll: true });
+    const all = document.createRange();
+    all.selectNodeContents(pre.current);
+    const s = document.getSelection();
+    s?.removeAllRanges();
+    s?.addRange(all);
+  };
   return (
     <figure className="text-figure">
       <PreviewTools>
-        {searchFrom && <SearchSelection root={pre} beforeSearch={searchFrom.beforeSearch} />}
+        {searchFrom && (
+          <IconButton
+            icon={<Search />}
+            label="Search for selection"
+            tip="Find the files with the selected text"
+            disabled={!q}
+            disabledReason={NO_SELECTION}
+            onClick={() => search(q)}
+          />
+        )}
         {tools}
       </PreviewTools>
       {text === null ? (
@@ -486,12 +508,45 @@ function TextFigure({
         </p>
       ) : (
         <>
-          <pre ref={pre} className="text-preview" data-testid="text-preview" data-native-menu>
+          <pre
+            ref={pre}
+            className="text-preview"
+            data-testid="text-preview"
+            tabIndex={0}
+            onContextMenu={(e) => {
+              const selected = selectionIn(pre.current);
+              menu.open({ copy: selected?.text ?? "", q: phraseQuery(selected?.words ?? "") }, e);
+            }}
+            onCopy={(e) => {
+              const selected = selectionIn(pre.current);
+              if (!selected) return;
+              e.preventDefault();
+              e.clipboardData.setData("text/plain", withoutMarks(selected.text));
+            }}
+            onKeyDown={(e) => {
+              // this text, not the list of files or the whole page
+              if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "a") {
+                e.preventDefault();
+                e.stopPropagation();
+                selectAll();
+              }
+            }}
+          >
             {visibleText(text.replace(/\r\n?/g, "\n"))}
           </pre>
           {children}
         </>
       )}
+      {menu.view((at) => ({
+        label: "Text",
+        entries: [
+          { label: "Copy", disabled: !at.copy, reason: NO_SELECTION, onSelect: () => void copy(at.copy) },
+          ...(searchFrom ? [{ label: "Search for selection", disabled: !at.q, reason: NO_SELECTION, onSelect: () => search(at.q) }] : []),
+          "separator" as const,
+          { label: "Select all", onSelect: selectAll },
+          ...(onShowPage ? [{ label: "Show page", onSelect: onShowPage }] : []),
+        ],
+      }))}
     </figure>
   );
 }
@@ -523,7 +578,7 @@ function TextPreview({ driveId, tools, searchFrom, onFail }: { driveId: string; 
 
 /** The text read from the file when it was indexed: what search looks in, so what is
  * selected here finds this file too. */
-function IndexedTextPreview({ driveId, tools, searchFrom }: { driveId: string; tools: ReactNode; searchFrom?: SearchFrom }) {
+function IndexedTextPreview({ driveId, tools, searchFrom, onShowPage }: { driveId: string; tools: ReactNode; searchFrom?: SearchFrom; onShowPage: () => void }) {
   const [text, setText] = useState<IndexedTextData | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -555,7 +610,7 @@ function IndexedTextPreview({ driveId, tools, searchFrom }: { driveId: string; t
     );
   }
   return (
-    <TextFigure text={text && text.text} tools={tools} searchFrom={searchFrom}>
+    <TextFigure text={text && text.text} tools={tools} searchFrom={searchFrom} onShowPage={onShowPage}>
       {text?.ocr_used && <p className="hint">Read from the scan by OCR, so it can have mistakes.</p>}
       {text?.truncated && <p className="hint">Only the start of the text is shown.</p>}
     </TextFigure>
@@ -878,7 +933,7 @@ function Preview({
       </figure>
     );
   }
-  if (asText) return <IndexedTextPreview driveId={driveId} tools={tools} searchFrom={searchFrom} />;
+  if (asText) return <IndexedTextPreview driveId={driveId} tools={tools} searchFrom={searchFrom} onShowPage={() => setAsText(false)} />;
   if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "text") return <TextPreview driveId={driveId} tools={tools} searchFrom={searchFrom} onFail={next("thumb")} />;

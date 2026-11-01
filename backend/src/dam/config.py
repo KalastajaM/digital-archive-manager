@@ -221,6 +221,8 @@ class Settings(BaseModel):
     reminders: RemindersSettings = Field(default_factory=RemindersSettings)
     # the folder expired files are renewed from; a plain folder name, never a special one
     expired_folder_name: str = "Expired"
+    # where a file's older versions move, inside its folder
+    versions_folder_name: str = "Archive"
     ai: AISettings = Field(default_factory=AISettings)
 
     @field_validator("address_zone")
@@ -233,9 +235,9 @@ class Settings(BaseModel):
             )
         return box
 
-    @field_validator("expired_folder_name")
+    @field_validator("expired_folder_name", "versions_folder_name")
     @classmethod
-    def _expired_folder_name(cls, value: str) -> str:
+    def _subfolder_name(cls, value: str) -> str:
         from dam.core.foldernames import FolderNameError, check_folder_name
 
         try:
@@ -252,6 +254,14 @@ class Settings(BaseModel):
         }:
             raise ValueError(
                 f"{self.expired_folder_name!r} is the name of one of the app's own folders."
+            )
+        # only a name that was set: the default must not stop an archive whose own folder
+        # happens to be called Archive from opening
+        if "versions_folder_name" in self.model_fields_set and fold_name(
+            self.versions_folder_name
+        ) in {fold_name(n) for n in self.special_folders.model_dump().values()}:
+            raise ValueError(
+                f"{self.versions_folder_name!r} is the name of one of the app's own folders."
             )
         return self
 

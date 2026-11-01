@@ -67,6 +67,7 @@ from dam.services.scan_fields import ScanFieldService
 from dam.services.senders import SenderNames
 from dam.services.summaries import SummaryService
 from dam.services.today import TodayService
+from dam.services.versions import VersionsService
 from dam.settings_write import REMOVE, write_keys
 from dam.setup import NOT_CONFIGURED
 from dam.snapshots import BEFORE_DELETE, BEFORE_GROUPS, BEFORE_MERGE, create_snapshot
@@ -232,6 +233,7 @@ class ServiceParts:
     ai: AIService
     summaries: SummaryService
     relatives: RelativesService
+    versions: VersionsService
     sender_names: SenderNames
     address_areas: AddressAreas
 
@@ -378,6 +380,9 @@ def build_services(
         ai=AIService(live, provider),
         summaries=SummaryService(engine, repo),
         relatives=RelativesService(engine, repo, paths),
+        versions=VersionsService(
+            engine, repo, paths, cols.locks, lambda: live.settings.versions_folder_name
+        ),
         sender_names=SenderNames(engine, repo),
         address_areas=address_areas,
     )
@@ -442,6 +447,7 @@ class App:
     ai: AIService = field(init=False)
     summaries: SummaryService = field(init=False)
     relatives: RelativesService = field(init=False)
+    versions: VersionsService = field(init=False)
     sender_names: SenderNames = field(init=False)
     address_areas: AddressAreas = field(init=False)
     # where the shipped default tray files live (tests point it elsewhere)
@@ -783,6 +789,29 @@ class App:
         except OSError as e:
             raise InvalidRequest(f"the setting could not be saved: {e}") from e
         self.settings.expired_folder_name = kept
+        return kept
+
+    def set_versions_folder(self, name: str) -> str:
+        """Set the name of the subfolder older versions move to (``versions_folder_name``
+        in settings.yaml), as ``set_expired_folder`` does for Expired."""
+        try:
+            kept = Settings.model_validate(
+                {
+                    "special_folders": self.settings.special_folders.model_dump(),
+                    "versions_folder_name": name,
+                }
+            ).versions_folder_name
+        except ValidationError as e:
+            raise InvalidRequest(format_validation(e)) from e
+        try:
+            write_keys(
+                self.app_paths,
+                {"versions_folder_name": kept},
+                lambda s: s.versions_folder_name == kept,
+            )
+        except OSError as e:
+            raise InvalidRequest(f"the setting could not be saved: {e}") from e
+        self.settings.versions_folder_name = kept
         return kept
 
     def set_countries(self, country_codes: list[str], language_codes: list[str]) -> None:
