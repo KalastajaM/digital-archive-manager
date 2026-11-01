@@ -246,6 +246,8 @@ class IndexingMixin:
             if sha256 is not None:
                 values["sha256"] = sha256
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(**values))
+            if sha256 is not None:
+                self._settle_change(conn, drive_id, row, sha256)
             fts_remove(conn, drive_id)  # while the view still shows the old text
             conn.execute(file_text.delete().where(file_text.c.drive_id == drive_id))
             # identifiers come from the text, which can change for the same bytes (OCR)

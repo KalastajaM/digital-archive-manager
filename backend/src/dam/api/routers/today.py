@@ -1,5 +1,6 @@
 """The Today page: what needs attention, the overview, Ongoing and reminder status."""
 
+from dataclasses import asdict
 from datetime import date
 
 from fastapi import APIRouter
@@ -10,6 +11,13 @@ from dam.api.schemas import TodayOut
 from dam.codes.batch import marked_count
 
 router = APIRouter(prefix="/api", tags=["today"])
+
+CHANGES_ON_TODAY = 8  # rows the Changed files section shows; is:changed finds the rest
+
+
+def _content_changes(app) -> dict:
+    rows, count = app.repo.content_changes(exclude=app.paths.quarantines, limit=CHANGES_ON_TODAY)
+    return {"count": count, "rows": [asdict(r) for r in rows]}
 
 
 @router.get("/today", response_model=TodayOut)
@@ -34,4 +42,5 @@ def today(app: AppDep) -> dict:
         "open_items": app.today.open_items(),
         "marked": marked_count(app, inbox),
         "reading_codes": app.repo.codes_pending() if app.codes else 0,
+        "content_changes": _content_changes(app),
     }

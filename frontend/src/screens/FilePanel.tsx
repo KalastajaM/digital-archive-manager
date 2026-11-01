@@ -11,6 +11,7 @@ import type { FilingAI } from "../components/ai/useFilingAI";
 import { SummaryBox } from "../components/ai/SummaryBox";
 import { FileMeta, type MetaFile } from "../components/FileMeta";
 import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
+import { ChangedNotice } from "../components/today/ChangedFiles";
 import { FoundIdentifiers } from "../components/FoundIdentifiers";
 import { RelativesBlock } from "../components/RelativesBlock";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
@@ -70,6 +71,7 @@ export function FilePanel({
           header={
             <>
               {meta.header}
+              {!readOnly && <ChangedNotice driveId={file.drive_id} />}
               {intro}
             </>
           }

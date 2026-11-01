@@ -1524,6 +1524,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/content-changes/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Seen
+         * @description Mark these notices as seen, or with no ``drive_ids`` every open one. Returns the
+         *     ids that were open, for Undo. Nothing on disk is touched.
+         */
+        post: operations["seen_api_content_changes_seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/content-changes/unseen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unseen
+         * @description Undo ``seen``: these notices are open again.
+         */
+        post: operations["unseen_api_content_changes_unseen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trays": {
         parameters: {
             query?: never;
@@ -5456,6 +5497,45 @@ export interface components {
             /** In Inbox */
             in_inbox: number;
         };
+        /**
+         * ContentChangeOut
+         * @description A file whose content differs from what dam last knew of it.
+         */
+        ContentChangeOut: {
+            /** Drive Id */
+            drive_id: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string | null;
+            /** Was Size */
+            was_size: number | null;
+            /** Was Mtime */
+            was_mtime: number | null;
+            /** Size */
+            size: number | null;
+            /** Mtime */
+            mtime: number | null;
+            /** Detected At */
+            detected_at: number;
+        };
+        /** ContentChangesOut */
+        ContentChangesOut: {
+            /** Count */
+            count: number;
+            /** Rows */
+            rows: components["schemas"]["ContentChangeOut"][];
+        };
+        /** ContentChangesSeenIn */
+        ContentChangesSeenIn: {
+            /** Drive Ids */
+            drive_ids?: string[] | null;
+        };
+        /** ContentChangesSeenOut */
+        ContentChangesSeenOut: {
+            /** Drive Ids */
+            drive_ids: string[];
+        };
         /** ConvertApplyBody */
         ConvertApplyBody: {
             /** Rel */
@@ -6030,6 +6110,7 @@ export interface components {
             /** Link Target Inside */
             link_target_inside: boolean;
             assignment?: components["schemas"]["AssignmentOut"] | null;
+            content_change?: components["schemas"]["ContentChangeOut"] | null;
         };
         /**
          * FileItResultOut
@@ -9419,6 +9500,13 @@ export interface components {
              * @default 0
              */
             reading_codes: number;
+            /**
+             * @default {
+             *       "count": 0,
+             *       "rows": []
+             *     }
+             */
+            content_changes: components["schemas"]["ContentChangesOut"];
         };
         /** TrayCountOut */
         TrayCountOut: {
@@ -17575,6 +17663,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TodayOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    seen_api_content_changes_seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentChangesSeenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentChangesSeenOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unseen_api_content_changes_unseen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentChangesSeenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentChangesSeenOut"];
                 };
             };
             /** @description Bad Request */

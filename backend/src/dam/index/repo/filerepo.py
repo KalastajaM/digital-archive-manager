@@ -19,6 +19,7 @@ from dam.db.generation import WriteGeneration
 from dam.db.tables import (
     files,
 )
+from dam.index.repo.changes import ChangesMixin
 from dam.index.repo.indexing import IndexingMixin
 from dam.index.repo.lookup import LookupMixin
 from dam.index.repo.model import (
@@ -31,7 +32,7 @@ from dam.index.repo.reads import ReadsMixin
 from dam.index.repo.rows import RowsMixin
 
 
-class FileRepo(LookupMixin, ReadsMixin, RowsMixin, IndexingMixin):
+class FileRepo(LookupMixin, ReadsMixin, RowsMixin, IndexingMixin, ChangesMixin):
     def __init__(self, engine: Engine, inbox: str) -> None:
         self.engine = engine
         self.inbox = nfc(inbox)
@@ -106,11 +107,14 @@ class FileRepo(LookupMixin, ReadsMixin, RowsMixin, IndexingMixin):
         The row's index state is left alone. Returns whether it was stored."""
         with self._conn(write=True) as conn:
             row = conn.execute(
-                select(files.c.size, files.c.mtime).where(files.c.drive_id == drive_id)
+                select(files.c.path, files.c.size, files.c.mtime).where(
+                    files.c.drive_id == drive_id
+                )
             ).first()
             if row is None or (row.size, row.mtime) != expect:
                 return False
             conn.execute(update(files).where(files.c.drive_id == drive_id).values(sha256=sha256))
+            self._settle_change(conn, drive_id, row, sha256)
         return True
 
     # -- flat listing (Browse "Files" view) -------------------------------------
