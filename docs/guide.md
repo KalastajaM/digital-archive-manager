@@ -225,8 +225,8 @@ trays, Today's tray lists and Starred, a collection's files and groups, and Rela
 right-click menu with their actions. An entry that cannot run now is greyed, with the
 reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
 that has the focus. The browser's own right-click menu is off everywhere else, except in
-text fields, where copy, paste and spelling still work. The PDF preview keeps its
-viewer's own menu.
+text fields, where copy, paste and spelling still work, and in a file's text (**Show
+text**), for Copy. The PDF preview keeps its viewer's own menu.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -1755,6 +1755,15 @@ it on one document.
 
 **Open** opens a file in its own app and **Show in Finder** (or Explorer) shows it in its
 folder. dam will not open apps, scripts or installers from the archive.
+
+**Show text** (the page icon in the preview's toolbar) swaps the page for the text dam read
+from the file, the same text search looks in, so you can select and copy it. A preview shows
+pages as pictures, which cannot be selected. Text read from a scan by OCR can have mistakes
+and stops at the first 20 pages, and text from a page with columns can come out in a
+different order. Select some text and **Search for selection** (the magnifier) opens Browse
+with it as a phrase search of whole words (a word you cut short counts whole), up to about
+200 characters; a text file has this button too.
+The viewer window has no Browse, so there you copy the text instead.
 
 ## Activity and undo
 

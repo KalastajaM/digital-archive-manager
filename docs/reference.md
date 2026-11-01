@@ -2012,6 +2012,9 @@ the command line: `dam errors [--all] [--retry]`.
 - `GET /api/files/{drive_id}/text?max=` returns the first 200 KB (or `max` bytes) of a
   txt, md, csv, log, json, xml or yaml file as UTF-8 (bad bytes replaced) and
   `truncated`.
+- `GET /api/files/{drive_id}/indexed-text` returns the text read from the file when it
+  was indexed, OCR included (a link: its target's), up to 1,000,000 characters:
+  `text` (empty when none was read), `truncated` and `ocr_used`.
 - Browse: `GET /api/browse?path=&collection=` and
   `GET /api/browse/files?path=&collection=&sort=&dir=&limit=` (at most 500). Collections:
   `POST /api/collections {name, parent_id?}` and

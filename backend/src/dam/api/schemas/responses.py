@@ -56,6 +56,12 @@ class TextPreviewOut(BaseModel):
     truncated: bool
 
 
+class IndexedTextOut(BaseModel):
+    text: str  # empty when no text was read from the file
+    truncated: bool
+    ocr_used: bool
+
+
 class TrayDefaultAddedOut(BaseModel):
     path: str  # dotted key path, e.g. "fields.iban"
     value: Any

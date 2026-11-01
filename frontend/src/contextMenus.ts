@@ -1,14 +1,14 @@
 /** Right-click menus app-wide: the browser's own menu is off everywhere except where text
- * is typed (text inputs, textareas, editable text: copy, paste and spelling still work),
- * and Shift+F10 or the ContextMenu key opens the focused element's own menu (a
+ * is typed (text inputs, textareas, editable text: copy, paste and spelling still work)
+ * or read to copy (``data-native-menu``: a file's text), and Shift+F10 or the ContextMenu key opens the focused element's own menu (a
  * ``contextmenu`` event at its lower left). The PDF preview is a frame of its own: its
  * viewer keeps its menu, which the app cannot replace. */
 import { useEffect } from "react";
 
-/** Where text is typed: the browser's menu stays there. */
+/** Where text is typed or copied: the browser's menu stays there. */
 function editable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable || target.closest("[contenteditable=''], [contenteditable='true']")) return true;
+  if (target.isContentEditable || target.closest("[contenteditable=''], [contenteditable='true'], [data-native-menu]")) return true;
   if (target instanceof HTMLTextAreaElement) return true;
   if (target instanceof HTMLInputElement) {
     return !["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"].includes(target.type);

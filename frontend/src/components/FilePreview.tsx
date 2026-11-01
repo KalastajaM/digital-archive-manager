@@ -1,4 +1,4 @@
-import { Maximize2, MoreHorizontal, Printer } from "lucide-react";
+import { FileText, Maximize2, MoreHorizontal, Printer, Search } from "lucide-react";
 import {
   createContext,
   type Dispatch,
@@ -16,7 +16,9 @@ import { useNavigate } from "react-router-dom";
 import {
   errorText,
   type FileRecord,
+  fetchIndexedText,
   fetchTextPreview,
+  type IndexedText as IndexedTextData,
   type PageWidth,
   pageUrl,
   rawUrl,
@@ -36,6 +38,7 @@ import { Menu } from "./ui/Menu";
 import { usePageLink, useScrollLink } from "./moveTogether";
 import { type BoxTool, WithBoxes } from "./zones/PageBoxes";
 import { parentOf } from "../paths";
+import { phraseQuery, wholeWords } from "../searchFilters";
 
 // Shown with <img> from /raw (never an iframe: /raw is CSP-sandboxed).
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif"]);
@@ -418,9 +421,84 @@ function PreviewTools({ children }: { children: ReactNode }) {
   );
 }
 
-/** The start of a text-like file, as text (hidden characters marked). A failure
- * (``onFail``) moves on to the Quick Look thumbnail. */
-function TextPreview({ driveId, tools, onFail }: { driveId: string; tools: ReactNode; onFail: () => void }) {
+/** Where "Search for selection" can go: left out where there is no Browse to search in. */
+type SearchFrom = { beforeSearch?: () => void };
+
+/** Searches the archive for the text selected in ``root``, as a phrase of whole words.
+ * Greyed until there is a selection there, so the row of tools does not shift. */
+function SearchSelection({ root, beforeSearch }: SearchFrom & { root: RefObject<HTMLElement | null> }) {
+  const navigate = useNavigate();
+  const [selected, setSelected] = useState("");
+  useEffect(() => {
+    const read = () => {
+      const s = document.getSelection();
+      const el = root.current;
+      if (!s || !el || s.isCollapsed || !el.contains(s.anchorNode) || !el.contains(s.focusNode)) return setSelected("");
+      const range = s.getRangeAt(0);
+      const before = document.createRange();
+      before.selectNodeContents(el);
+      before.setEnd(range.startContainer, range.startOffset);
+      const start = before.toString().length;
+      setSelected(wholeWords(el.textContent ?? "", start, start + range.toString().length));
+    };
+    document.addEventListener("selectionchange", read);
+    return () => document.removeEventListener("selectionchange", read);
+  }, [root]);
+  const q = phraseQuery(selected);
+  return (
+    <IconButton
+      icon={<Search />}
+      label="Search for selection"
+      tip="Find the files with the selected text"
+      disabled={!q}
+      disabledReason="Select some text first"
+      onClick={() => {
+        beforeSearch?.();
+        navigate(`/browse?${new URLSearchParams({ q })}`);
+      }}
+    />
+  );
+}
+
+/** A file's text to select and copy (hidden characters marked), with the browser's own
+ * right-click menu for Copy. ``text`` null: on its way. ``children``: notes below it. */
+function TextFigure({
+  text,
+  tools,
+  searchFrom,
+  children,
+}: {
+  text: string | null;
+  tools: ReactNode;
+  searchFrom?: SearchFrom;
+  children?: ReactNode;
+}) {
+  const pre = useRef<HTMLPreElement>(null);
+  return (
+    <figure className="text-figure">
+      <PreviewTools>
+        {searchFrom && <SearchSelection root={pre} beforeSearch={searchFrom.beforeSearch} />}
+        {tools}
+      </PreviewTools>
+      {text === null ? (
+        <p className="busy preview-loading" role="status">
+          Loading the text…
+        </p>
+      ) : (
+        <>
+          <pre ref={pre} className="text-preview" data-testid="text-preview" data-native-menu>
+            {visibleText(text.replace(/\r\n?/g, "\n"))}
+          </pre>
+          {children}
+        </>
+      )}
+    </figure>
+  );
+}
+
+/** The start of a text-like file, as text. A failure (``onFail``) moves on to the Quick
+ * Look thumbnail. */
+function TextPreview({ driveId, tools, searchFrom, onFail }: { driveId: string; tools: ReactNode; searchFrom?: SearchFrom; onFail: () => void }) {
   const [text, setText] = useState<TextPreviewData | null>(null);
   const failed = useRef(onFail);
   failed.current = onFail;
@@ -437,21 +515,50 @@ function TextPreview({ driveId, tools, onFail }: { driveId: string; tools: React
     };
   }, [driveId]);
   return (
-    <figure className="text-figure">
-      <PreviewTools>{tools}</PreviewTools>
-      {text === null ? (
-        <p className="busy preview-loading" role="status">
-          Loading the text…
-        </p>
-      ) : (
-        <>
-          <pre className="text-preview" data-testid="text-preview">
-            {visibleText(text.text.replace(/\r\n?/g, "\n"))}
-          </pre>
-          {text.truncated && <p className="hint">Only the start of the file is shown. Open it to see all of it.</p>}
-        </>
-      )}
-    </figure>
+    <TextFigure text={text && text.text} tools={tools} searchFrom={searchFrom}>
+      {text?.truncated && <p className="hint">Only the start of the file is shown. Open it to see all of it.</p>}
+    </TextFigure>
+  );
+}
+
+/** The text read from the file when it was indexed: what search looks in, so what is
+ * selected here finds this file too. */
+function IndexedTextPreview({ driveId, tools, searchFrom }: { driveId: string; tools: ReactNode; searchFrom?: SearchFrom }) {
+  const [text, setText] = useState<IndexedTextData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const controller = new AbortController();
+    fetchIndexedText(driveId, controller.signal).then(
+      (t) => live && setText(t),
+      (e) => live && setError(errorText(e)),
+    );
+    return () => {
+      live = false;
+      controller.abort();
+    };
+  }, [driveId]);
+  if (error !== null || text?.text === "") {
+    return (
+      <figure className="no-preview-figure">
+        <PreviewTools>{tools}</PreviewTools>
+        <div className="no-preview">
+          {error !== null ? (
+            <p className="error" role="alert">
+              Could not load the text: {visible(error)}
+            </p>
+          ) : (
+            <p>No text has been read from this file.</p>
+          )}
+        </div>
+      </figure>
+    );
+  }
+  return (
+    <TextFigure text={text && text.text} tools={tools} searchFrom={searchFrom}>
+      {text?.ocr_used && <p className="hint">Read from the scan by OCR, so it can have mistakes.</p>}
+      {text?.truncated && <p className="hint">Only the start of the text is shown.</p>}
+    </TextFigure>
   );
 }
 
@@ -698,9 +805,10 @@ type PreviewProps = {
 };
 
 type LinkProps = {
-  /** A link's "Go to target" button (off in the viewer window, which has no Browse). */
+  /** A link's "Go to target" and the text's "Search for selection" (off in the viewer
+   * window, which has no Browse). */
   goToTarget?: boolean;
-  /** Runs before "Go to target" navigates (Quick Look closes itself first). */
+  /** Runs before either of them navigates (Quick Look closes itself first). */
   beforeGoToTarget?: () => void;
 };
 
@@ -714,23 +822,45 @@ type Stage = "doc" | "text" | "thumb" | "none";
 const firstStage = (kind: string): Stage =>
   kind === "pdf" || IMAGE_EXTS.has(kind) ? "doc" : TEXT_EXTS.has(kind) ? "text" : "thumb";
 
-function Preview({ file, windowButton, zoomControl, extraTools, showInFolder, boxTool }: PreviewProps & { windowButton: boolean }) {
+function Preview({
+  file,
+  windowButton,
+  goToTarget,
+  beforeGoToTarget,
+  zoomControl,
+  extraTools,
+  showInFolder,
+  boxTool,
+}: PreviewProps & LinkProps & { windowButton: boolean }) {
   const { drive_id: driveId, path, ext } = file;
   const kind = ext?.toLowerCase() ?? "";
   const [stage, setStage] = useState<Stage>(() => firstStage(kind));
+  const [asText, setAsText] = useState(false);
   const launch = useFileLaunch(driveId);
   const offline = file.connected === false;
+  // a text file already shows its text
+  const textToggle = stage !== "text" && (
+    <IconButton
+      icon={<FileText />}
+      label="Show text"
+      tip="Show the text read from this file, to select and copy"
+      pressed={asText}
+      onClick={() => setAsText((on) => !on)}
+    />
+  );
+  const searchFrom = goToTarget === false ? undefined : { beforeSearch: beforeGoToTarget };
   // the New Inbox's document bar: Open and one ⋯ menu instead of the icon buttons
   const bar = useContext(BarContext) !== null;
   const newTools = bar
     ? (print?: PrintSpec) => (
-        <DocTools driveId={driveId} launch={launch} offline={offline} windowButton={windowButton} print={print} extra={extraTools} />
+        <DocTools driveId={driveId} launch={launch} offline={offline} windowButton={windowButton} print={print} extra={<>{textToggle}{extraTools}</>} />
       )
     : undefined;
   const tools = newTools ? (
     newTools()
   ) : (
     <>
+      {textToggle}
       <LaunchButtons launch={launch} offline={offline} />
       {showInFolder && <ShowInFolderButton onClick={showInFolder} />}
       {windowButton && <OpenInWindow driveId={driveId} />}
@@ -748,9 +878,10 @@ function Preview({ file, windowButton, zoomControl, extraTools, showInFolder, bo
       </figure>
     );
   }
+  if (asText) return <IndexedTextPreview driveId={driveId} tools={tools} searchFrom={searchFrom} />;
   if (stage === "doc" && kind === "pdf") return <PdfPages driveId={driveId} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
   if (stage === "doc") return <ImagePreview driveId={driveId} path={path} tools={newTools ? undefined : tools} newTools={newTools} control={zoomControl} boxTool={boxTool} onFail={next("thumb")} />;
-  if (stage === "text") return <TextPreview driveId={driveId} tools={tools} onFail={next("thumb")} />;
+  if (stage === "text") return <TextPreview driveId={driveId} tools={tools} searchFrom={searchFrom} onFail={next("thumb")} />;
   if (stage === "thumb") return <ThumbPreview file={file} tools={tools} onFail={next("none")} />;
   return (
     <figure className="no-preview-figure">
@@ -833,6 +964,8 @@ function LinkPreview({
         <Preview
           file={{ drive_id: file.drive_id, path: target, ext: extOfPath(target) }}
           windowButton={windowButton}
+          goToTarget={goToTarget}
+          beforeGoToTarget={beforeGoToTarget}
           zoomControl={zoomControl}
           extraTools={extraTools}
           showInFolder={showInFolder}
@@ -895,6 +1028,8 @@ function PreviewOf({
       key={file.drive_id}
       file={file}
       windowButton={windowButton}
+      goToTarget={goToTarget}
+      beforeGoToTarget={beforeGoToTarget}
       zoomControl={zoomControl}
       extraTools={extraTools}
       showInFolder={showInFolder}

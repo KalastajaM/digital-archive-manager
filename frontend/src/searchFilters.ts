@@ -158,3 +158,35 @@ export const positiveTags = (filters: SearchFilter[]) =>
 
 /** The query that shows the files with this tag (the link from the tag lists). */
 export const tagFilter = (name: string) => filterToken({ name: "tag", value: name, negated: false });
+
+const isWordChar = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
+/** ``text`` from ``start`` to ``end``, widened where an end cuts a word: search matches
+ * whole words, so a selection dragged a little short would find nothing. */
+export function wholeWords(text: string, start: number, end: number): string {
+  let from = start;
+  let to = end;
+  if (isWordChar(text[from])) while (isWordChar(text[from - 1])) from--;
+  if (isWordChar(text[to - 1])) while (isWordChar(text[to])) to++;
+  return text.slice(from, to);
+}
+
+/** How much of a selection a phrase search takes: enough to tell documents apart, and an
+ * address stays short. */
+const PHRASE_MAX_CHARS = 200;
+
+/** Selected text as one phrase for the search box ("" when nothing is left of it). Colons
+ * go, or ``Name: x`` inside the quotes would read as a filter (search ignores punctuation
+ * anyway), and so do the marks shown for hidden characters. A long selection is cut at a word. */
+export function phraseQuery(selected: string): string {
+  let words = selected
+    .replace(/⟨U\+[0-9A-F]+⟩/g, "")
+    .replace(/["：:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (words.length > PHRASE_MAX_CHARS) {
+    const cut = words.lastIndexOf(" ", PHRASE_MAX_CHARS);
+    words = words.slice(0, cut > 0 ? cut : PHRASE_MAX_CHARS);
+  }
+  return /[\p{L}\p{N}]/u.test(words) ? `"${words}"` : "";
+}
