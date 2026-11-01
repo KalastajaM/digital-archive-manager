@@ -12,6 +12,7 @@
   - [Signing the browser in](#signing-the-browser-in)
 - [The window](#the-window)
 - [Today](#today)
+  - [When a file's content changes](#when-a-files-content-changes)
 - [Filing from the Inbox](#filing-from-the-inbox)
 - [Filing codes](#filing-codes)
   - [Inbox folders](#inbox-folders)
@@ -252,7 +253,9 @@ to what it counts; then two columns.
   When inbox files have a filing code, **File N marked** opens them as one batch (see
   [Filing codes](#filing-codes)). Under it come **Collections to do** (the open
   collections that still have to-dos: open checklist entries, or files still in the
-  inbox), **Starred** and **Reminders** (the result of the last reminder check).
+  inbox), **Starred** and **Reminders** (the result of the last reminder check). While a
+  file's content has changed, **Changed files** sits under the Inbox (see
+  [When a file's content changes](#when-a-files-content-changes)).
 
 Each tray row has a round checkbox that marks the item done at once (a bill is marked
 paid today), with a toast to undo it; only a done field that needs a value you must give
@@ -265,6 +268,38 @@ layout** puts them back. In a narrow window the right column moves under the lef
 
 Today also shows a banner while `##. Ongoing` or `##. Important` holds things dam does not
 manage yet, with a **Convert** button (see [Converting existing folders](#converting-existing-folders)).
+
+### When a file's content changes
+
+An archive mostly stays as it is, so dam tells you when a file's content is no longer what
+it was. **Changed files** on Today lists the newest eight, each with the day it was changed
+and its size before and now ("30 Oct, was 120 KB, now 134 KB"). The section is only there
+while something has changed. A file's panel says the same under its name.
+
+- A click on the name shows the file in Browse; right-click a row for **Show in Browse**,
+  **Open**, **Show in Finder** and **Mark as seen**.
+- **Mark as seen** ends the notice and **Mark all seen** ends them all, each with **Undo** in
+  the toast. Nothing happens to the file. If it changes again later you get a new notice.
+- **Show all**, or the search `is:changed`, finds every changed file you have not marked as
+  seen. A search of your own can narrow it down (`is:changed type:pdf`).
+
+What counts is the file's bytes: dam compares a fingerprint of the content from before and
+after. So a file that was only touched, moved or renamed gets no notice, a file changed
+back to what it was loses its notice, and several saves in a row are one notice, from the
+content you last knew. The notice comes once dam has read the file again, so a cloud-only
+file or a long reading queue can take a while.
+
+dam only says that the content changed, not what in it did, because it keeps no old copies.
+It cannot tell you about:
+
+- a file it had not read yet when it changed, since there is nothing to compare with;
+- a change that leaves both the size and the modified time as they were, because dam does
+  not read the whole archive again to look for one;
+- a file replaced by a different one under the same name in Google Drive (it has a new
+  Drive ID, so it counts as a new file).
+
+Files in the Inbox and in To Delete have no notices: the Inbox because a file there is
+still arriving.
 
 ## Filing from the Inbox
 
@@ -1466,7 +1501,7 @@ with a dash (`-5%`) needs quotes to be searched: `"-5%"`.
 | `after:` | Dated on or after the first day of that year, month or day. | `after:2025` |
 | `before:` | Dated before the first day of that year, month or day. | `before:2026-06` |
 | `tray:` | Files with an open item in that tray, by its id or name. `tray:*` finds files with an open item in any tray. | `tray:to-pay`, `tray:*` |
-| `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary` (the file has a summary), `disconnected` (the file is in an archive folder that is not connected now; see [Several archive folders](#several-archive-folders)). | `is:locked` |
+| `is:` | `starred`, `important`, `locked` (the locks you set yourself; Important files are always locked but are found with `is:important`), `todo` (an open checklist entry on the file or on its open item), `note` (the file has a note), `summary`, `changed` (the content changed and you have not marked it as seen) (the file has a summary), `disconnected` (the file is in an archive folder that is not connected now; see [Several archive folders](#several-archive-folders)). | `is:locked` |
 
 Tips:
 

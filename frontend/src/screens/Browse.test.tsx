@@ -774,7 +774,7 @@ describe("Selected file", () => {
     const preview = await openFile(user);
     await within(preview).findByRole("region", { name: "Tags" });
     const blocks = Array.from(preview.querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "relatives", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "versions", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => preview.querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "a.pdf" })).toBeInTheDocument();
     expect(within(inBlock("header")).getByRole("button", { name: "Move file to…" })).toBeInTheDocument();

@@ -24,6 +24,7 @@ from dam.core.paths import nfc
 from dam.db.tables import (
     checklist_items,
     collection_members,
+    content_changes,
     file_address_zones,
     file_assigned_codes,
     file_assignments,
@@ -87,6 +88,7 @@ class RowsMixin:
     def _delete_rows(conn: Connection, ids: list[str]) -> None:
         for drive_id in ids:
             conn.execute(file_tags.delete().where(file_tags.c.drive_id == drive_id))
+            conn.execute(content_changes.delete().where(content_changes.c.drive_id == drive_id))
             conn.execute(file_barcodes.delete().where(file_barcodes.c.drive_id == drive_id))
             conn.execute(file_qr_codes.delete().where(file_qr_codes.c.drive_id == drive_id))
             conn.execute(
@@ -207,6 +209,7 @@ class RowsMixin:
                 file_assignments,
                 file_address_zones,
                 file_summaries,
+                content_changes,
                 file_fields,
                 rule_outcomes,
                 file_assigned_codes,

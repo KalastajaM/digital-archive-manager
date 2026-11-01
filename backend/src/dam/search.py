@@ -93,6 +93,8 @@ class SearchContext:
     trays: Callable[[], list[tuple[str, str]]] = list
     # the labels of the extra folders that are not connected now, for ``is:disconnected``
     disconnected: tuple[str, ...] = ()
+    # the To Delete folders, which ``is:changed`` leaves out
+    quarantines: tuple[str, ...] = ()
 
 
 class _Where:
@@ -375,6 +377,15 @@ def _is_sql(engine: Engine, w: _Where, value: str, ctx: SearchContext) -> str:
         )
     elif value == "summary":
         return "f.drive_id IN (SELECT drive_id FROM file_summaries WHERE TRIM(summary) != '')"
+    elif value == "changed":
+        # the notices Today lists: not yet seen, and not for a file in To Delete
+        found = (
+            "f.drive_id IN (SELECT drive_id FROM content_changes "
+            "WHERE sha256 IS NOT NULL AND seen_at IS NULL)"
+        )
+        if ctx.quarantines:
+            return f"{found} AND NOT ({_under_any(w, list(ctx.quarantines))})"
+        return found
     elif value == "disconnected":
         return _under_any(w, list(ctx.disconnected))  # none: "0", nothing found
     return "0"

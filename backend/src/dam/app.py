@@ -1033,6 +1033,7 @@ class App:
         ctx = SearchContext(
             trays=lambda: [(t.id, t.name) for t in self.trays.defs()],
             disconnected=self.paths.disconnected_labels(cached=True),
+            quarantines=tuple(self.paths.quarantines),
         )
         return search(
             self.engine,

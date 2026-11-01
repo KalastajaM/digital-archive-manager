@@ -2,8 +2,8 @@
  * counts with Customize and Start filing, the Convert notice, four stat tiles, then two
  * columns. Left: the "To pay" table (Pay opens Pay mode on that bill, Paid marks it paid;
  * a bill that is overdue or due today opens up with its copy buttons and note) and the
- * other trays as compact lists. Right: the Inbox summary, Collections to do, Starred,
- * Reminders (search lives in the palette and Browse).
+ * other trays as compact lists. Right: the Inbox summary, Changed files, Collections to
+ * do, Starred, Reminders (search lives in the palette and Browse).
  *
  * Customize turns the page into an arrange mode: each section gets its fold chevron and
  * Move up / Move down and can be dragged by its heading, and Reset layout puts them back
@@ -18,6 +18,7 @@ import { CopyButton } from "../components/CopyButton";
 import { ItemBadges } from "../components/ItemBadges";
 import { useLocalClock } from "../components/RelativeDate";
 import { FoundList, NotRecognised } from "../components/today/InboxCard";
+import { ChangedFilesCard } from "../components/today/ChangedFiles";
 import { CollectionsCard, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
 import { StarredCard } from "../components/today/StarredCard";
 import { countsOf, headlineOf, openLine, tilesOf } from "../components/today/summary";
@@ -441,12 +442,13 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const hiddenCards = [
     ...(billTrays.length === 0 ? ["pay"] : []),
     ...(data.data && needingAttention(data.data).length === 0 ? ["collections"] : []),
+    ...(!data.data?.content_changes?.count ? ["changes"] : []),
   ];
   const hidden = new Set(hiddenCards);
   const layout = useCardLayout(
     [
       ["pay", ...otherTrays.map(trayId)],
-      ["inbox", "collections", "starred", "reminders"],
+      ["inbox", "changes", "collections", "starred", "reminders"],
     ],
     {},
     hiddenCards,
@@ -467,6 +469,7 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
   const titles: Record<string, string> = {
     pay: billsTitle(billTrays),
     inbox: "Inbox",
+    changes: "Changed files",
     collections: "Collections to do",
     starred: "Starred",
     reminders: "Reminders",
@@ -491,6 +494,9 @@ export default function TodayNew({ today: fixed }: { today?: string }) {
       );
     }
     if (id === "inbox") return <InboxSection data={d} frame={frame} />;
+    if (id === "changes") {
+      return <ChangedFilesCard rows={d.content_changes.rows} count={d.content_changes.count} frame={frame} />;
+    }
     if (id === "starred") return <StarredCard frame={frame} Shell={TnSection} />;
     if (id === "collections") return <CollectionsCard data={d} frame={frame} Shell={TnSection} />;
     if (id === "reminders") return <RemindersCard data={d} today={today} frame={frame} Shell={TnSection} />;

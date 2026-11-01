@@ -1,14 +1,14 @@
 """version_dismissed: pairs of files the owner marked "Not a version"
 
-Revision ID: 0049
-Revises: 0048
+Revision ID: 0050
+Revises: 0049
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0049"
-down_revision = "0048"
+revision = "0050"
+down_revision = "0049"
 branch_labels = None
 depends_on = None
 
