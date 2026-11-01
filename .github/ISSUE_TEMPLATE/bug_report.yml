@@ -24,7 +24,7 @@ body:
     id: version
     attributes:
       label: dam version
-      description: For example 0.9.0, or the commit you built from.
+      description: For example 1.0.0, or the commit you built from.
     validations:
       required: true
   - type: textarea
