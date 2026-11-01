@@ -73,3 +73,27 @@ class LinkThereBody(StrictIn):
 
     drive_id: str
     folders: list[str]
+
+
+class VersionFileOut(BaseModel):
+    drive_id: str
+    path: str
+    name: str
+    mtime: float | None
+    latest: bool
+    in_archive: bool
+
+
+class VersionStayingOut(BaseModel):
+    name: str
+    reason: str
+
+
+class VersionsOut(BaseModel):
+    files: list[VersionFileOut]
+    latest: str | None
+    hidden: int
+    folder: str | None
+    movable: list[str]
+    staying: list[VersionStayingOut]
+    blocked: str | None

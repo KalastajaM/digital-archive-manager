@@ -14,6 +14,7 @@ import { FilePanelSkeleton } from "../components/FilePanelSkeleton";
 import { ChangedNotice } from "../components/today/ChangedFiles";
 import { FoundIdentifiers } from "../components/FoundIdentifiers";
 import { RelativesBlock } from "../components/RelativesBlock";
+import { VersionsBlock, VersionsNotice } from "../components/VersionsBlock";
 import { FilePreview, type PreviewFile } from "../components/FilePreview";
 import { Breakable } from "../components/PlanPreview";
 import type { RestoreTo } from "../components/Restore";
@@ -71,6 +72,7 @@ export function FilePanel({
           header={
             <>
               {meta.header}
+              {relatives && <VersionsNotice driveId={file.drive_id} />}
               {!readOnly && <ChangedNotice driveId={file.drive_id} />}
               {intro}
             </>
@@ -80,6 +82,7 @@ export function FilePanel({
           collections={<FileCollections driveId={file.drive_id} hideItem={hideItem} readOnly={readOnly} />}
           group={extras}
           summary={summary ?? <SummaryBox driveId={file.drive_id} readOnly={readOnly} />}
+          versions={relatives ? <VersionsBlock driveId={file.drive_id} /> : undefined}
           relatives={
             relatives && file.path !== null ? (
               <>

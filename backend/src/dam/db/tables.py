@@ -540,6 +540,16 @@ related_dismissed = Table(
     Column("created", Float, nullable=False),
 )
 
+# Pairs of files the owner marked "Not a version" (0050): left out of each other's Versions,
+# keyed like ``related_dismissed``. Separate, as that says nothing about being related.
+version_dismissed = Table(
+    "version_dismissed",
+    metadata,
+    Column("drive_a", Text, primary_key=True),
+    Column("drive_b", Text, primary_key=True),
+    Column("created", Float, nullable=False),
+)
+
 # Where the address sits on page 1 of one document, as the owner drew it (migration 0047):
 # used instead of the archive's address area and a rule's. All four sides null: the
 # document has no address area (nobody is looked for). No row: the general area applies.

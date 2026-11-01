@@ -7,16 +7,17 @@
  *  4. summary      foldable
  *  5. own          what only this view has (a tray's fields and Mark done, a collection's
  *                  group and Remove, Browse's Put in tray)
- *  6. relatives    the files it belongs with (foldable)
- *  7. preview      with its toolbar
- *  8. notes        notes, checklist, history (foldable), where the view has them
+ *  6. versions     the other versions of this document, when it has any (foldable)
+ *  7. relatives    the files it belongs with (foldable)
+ *  8. preview      with its toolbar
+ *  9. notes        notes, checklist, history (foldable), where the view has them
  *
  * A screen fills the blocks; it cannot reorder them, and the keyboard order is the DOM
  * order. A block left empty is not rendered. The block wrappers take no space of their
  * own (``display: contents``), so each screen styles its content as before. */
 import type { HTMLAttributes, ReactNode } from "react";
 
-export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "relatives", "preview", "notes"] as const;
+export const FILE_VIEW_BLOCKS = ["header", "tags", "collections", "summary", "own", "versions", "relatives", "preview", "notes"] as const;
 /** The one file panel skeleton (``FilePanelSkeleton``): the icon row right under
  * the header, the screen's own section (the Inbox's filing form) under them, a collection's
  * group under its collections. */
@@ -29,6 +30,7 @@ export const SKELETON_BLOCKS = [
   "group",
   "summary",
   "own",
+  "versions",
   "relatives",
   "preview",
   "notes",

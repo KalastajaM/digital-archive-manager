@@ -1807,7 +1807,7 @@ describe("The item view layout", () => {
     await within(detail()).findByRole("region", { name: "Tags" });
     await within(detail()).findByRole("img", { name: "Page 1" });
     const blocks = Array.from(detail().querySelectorAll("[data-block]")).map((b) => b.getAttribute("data-block"));
-    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "relatives", "preview", "notes"]);
+    expect(blocks).toEqual(["header", "actions", "tags", "collections", "summary", "versions", "relatives", "preview", "notes"]);
     const inBlock = (name: string) => detail().querySelector(`[data-block="${name}"]`) as HTMLElement;
     expect(within(inBlock("header")).getByRole("heading", { level: 2, name: "northpower.pdf" })).toBeInTheDocument();
     expect(within(inBlock("tags")).getByRole("region", { name: "Tags" })).toBeInTheDocument();

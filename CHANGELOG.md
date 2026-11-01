@@ -8,6 +8,11 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Versions.** A file's panel says when a newer version of the document exists and lists the
+  versions, with the latest marked (Word, Excel, PowerPoint, OpenDocument, Pages, Numbers,
+  Keynote, RTF, text and Markdown files in one folder, by name; latest means last changed on
+  disk). **Not a version** takes out a false match. **Move N older to Archive…** moves the older
+  ones into a subfolder, with a preview and Undo; its name is a setting in Archive folders.
 - **Changed files.** dam tells you when a file's content is no longer what it was: a
   **Changed files** section on Today (only there while something changed), a line in the
   file's panel and the search `is:changed`. It compares the content's hash from before
