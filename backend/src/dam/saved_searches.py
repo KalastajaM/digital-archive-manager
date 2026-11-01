@@ -97,7 +97,7 @@ class SavedSearches:
                 )
         return SavedSearch(have, name, query, tag_mode)
 
-    def rename(self, search_id: int, name: str) -> SavedSearch:
+    def set_name(self, search_id: int, name: str) -> SavedSearch:
         """Give a saved search another name; "exists" when another one has it."""
         name = _name(name)
         with write_tx(self.engine) as conn:

@@ -206,7 +206,7 @@ setting. The sidebar, from the top:
   Collections tree: **Open**, **New collection inside…**, **Merge into…**, **Delete…**,
   then Move up / Move down / Move out one level;
 - **Searches**: your [saved searches](#saved-searches), A to Z, each with its number of
-  matches (shown only once you have saved one);
+  matches (none shown for 0; the section shows once you have saved one);
 - **Tags**: the caption opens the [Tags](#tags) screen; below it your pinned tags, then
   the tags you used most lately, eight at most, each opening its files in Browse.
   Right-click the caption (Pinned tags or Recent tags) for **New tag**,
@@ -1478,8 +1478,9 @@ it a name and **Save**. With **This folder** on, the folder is saved with it as 
 filter, so the saved search finds the same files.
 
 Saved searches are listed in the sidebar under **Searches**, A to Z, with the number of
-files each finds now (`500+` past 500). Click one to open Browse with that search; its row
-is highlighted while Browse shows it. Hover a name to see its query, which is also a
+files each finds now (`500+` past 500; no number when it finds none). Click one to open
+Browse with that search in the whole archive (**This folder** goes off); its row is
+highlighted while Browse shows it. Hover a name to see its query, which is also a
 reminder of how its filters are written. The **?** next to the search box lists your saved
 searches under the filter examples, and a click there puts the query in the box. The
 search palette (⌘K) finds saved searches by name.

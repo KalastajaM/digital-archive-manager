@@ -16,6 +16,10 @@ function normal({ query, tag_mode }: SearchState): string {
 /** Do two searches find the same files the same way? */
 export const sameSearch = (a: SearchState, b: SearchState) => normal(a) === normal(b);
 
+/** The navigation state a saved search opens Browse with: it searches the whole archive
+ * (This folder off), as its count in the sidebar does. */
+export const SEARCH_EVERYWHERE = { searchEverywhere: true } as const;
+
 /** The Browse address that runs a saved search. */
 export function savedSearchHref(s: SearchState): string {
   const p = new URLSearchParams({ q: s.query });

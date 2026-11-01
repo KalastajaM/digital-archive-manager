@@ -61,7 +61,7 @@ import {
 import { anyMoveRunning, backToInbox, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../MoveTo";
 import { undoAction, useBlockToastActions, useToast } from "../Toasts";
 import { SaveSearchSheet } from "../SaveSearchSheet";
-import { sameSearch, savedSearchHref } from "../../savedSearch";
+import { SEARCH_EVERYWHERE, sameSearch, savedSearchHref } from "../../savedSearch";
 import {
   type CollectionOrder,
   orderKeys,
@@ -538,7 +538,7 @@ function SearchesSection({ sections }: { sections: SectionFolds }) {
     }
   };
   const entries = (s: SavedSearch): MenuEntry[] => [
-    { label: "Open", onSelect: () => navigate(savedSearchHref(s)) },
+    { label: "Open", onSelect: () => navigate(savedSearchHref(s), { state: SEARCH_EVERYWHERE }) },
     { label: "Rename…", onSelect: () => setRenaming(s) },
     "separator",
     { label: "Delete", onSelect: () => void remove(s) },
@@ -557,6 +557,7 @@ function SearchesSection({ sections }: { sections: SectionFolds }) {
                 {/* a plain Link, as the tags: every saved search shares /browse */}
                 <Link
                   to={savedSearchHref(s)}
+                  state={SEARCH_EVERYWHERE}
                   className={isCurrent ? "sidebar-row active" : "sidebar-row"}
                   aria-label={count ? `${name} (${count})` : name}
                   aria-current={isCurrent ? "page" : undefined}

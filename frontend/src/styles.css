@@ -439,7 +439,7 @@ dialog.palette .palette-field input:focus-visible { flex: 1; min-width: 0; heigh
 .count { color: var(--muted); font-weight: normal; }
 .hint { color: var(--muted); font-size: var(--fs-sm); }
 .error { color: var(--red-text); background: var(--red-bg); padding: 6px 8px; overflow-wrap: anywhere; }
-.notice { color: var(--orange-text); background: var(--orange-bg); padding: 6px 8px; }
+.notice { color: var(--orange-text); background: var(--orange-bg); padding: 6px 8px; overflow-wrap: anywhere; }
 .actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin: var(--sp-3) 0; }
 .ongoing-preview-reason { margin: 0 auto 0 0; align-self: center; }
 .field { margin-bottom: var(--sp-3); }

@@ -871,6 +871,10 @@ export default function Browse() {
   const tagMode: TagMode = positiveTags(filters).length > 1 && params.get("tag_mode") === "any" ? "any" : "all";
   const typed = splitSearch(query);
   const [scope, setScope] = useState<"folder" | "everywhere">("everywhere");
+  useEffect(() => {
+    // a saved search opened from the sidebar or the palette finds what its count says
+    if ((location.state as { searchEverywhere?: boolean } | null)?.searchEverywhere) setScope("everywhere");
+  }, [location.key, location.state]);
   // The search results' column order; null: best match first (the API's order).
   const [searchSort, setSearchSort] = useState<SortState | null>(null);
   const [searchPane, setSearchPane] = useState<PaneId>("left");

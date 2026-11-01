@@ -1336,8 +1336,9 @@ export type SavedSearch = Schemas["SavedSearchRowOut"];
 export type SavedSearchIn = { name: string; query: string; tag_mode: "all" | "any"; replace?: boolean };
 
 /** Under Browse's key: whatever reloads Browse (a file filed, moved, tagged) reloads the
- * counts too, and so do the events that make search results stale. */
-const savedSearchesKey = [...keys.browse, "saved-searches"] as const;
+ * counts too, and so do the events that make search results stale. An object, not a
+ * string, so no folder's listing (``[...keys.browse, path]``) can share it. */
+const savedSearchesKey = [...keys.browse, { savedSearches: true }] as const;
 
 /** The saved searches by name, each with its number of matches now. */
 export const useSavedSearches = () => {

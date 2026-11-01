@@ -2,7 +2,7 @@ import { File as FileIcon, Folder, Layers, ListFilter, type LucideIcon, Search, 
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAllTags, useCollections, useFolders, useSavedSearches, useTrays } from "../api/client";
-import { savedSearchHref } from "../savedSearch";
+import { SEARCH_EVERYWHERE, savedSearchHref } from "../savedSearch";
 import { useKeydown } from "../keyboard";
 import { baseName, parentOf } from "../paths";
 import { isSearchKey } from "../searchKey";
@@ -44,6 +44,8 @@ type Item = {
   icon: LucideIcon;
   /** Where it goes; a suggestion has none (it edits the box instead). */
   to?: string;
+  /** The navigation state it goes with (a saved search: search everywhere). */
+  state?: unknown;
   completion?: Completion;
 };
 
@@ -125,7 +127,7 @@ function useResults(query: string, typed: ReturnType<typeof splitSearch>, sugges
         out.push({ key: `collection:${c.id}`, group: "Collections", label: visible(c.name), hint: where || undefined, icon: Layers, to: collectionHref(c) });
       }
       for (const q of best(saved.data ?? [], words, (q) => q.name, MAX.saved)) {
-        out.push({ key: `saved:${q.id}`, group: "Saved searches", label: visible(q.name), hint: visible(q.query), icon: Search, to: savedSearchHref(q) });
+        out.push({ key: `saved:${q.id}`, group: "Saved searches", label: visible(q.name), hint: visible(q.query), icon: Search, to: savedSearchHref(q), state: SEARCH_EVERYWHERE });
       }
     }
     if (words.length > 0) {
@@ -246,7 +248,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
     }
     if (!item.to) return;
     onClose();
-    navigate(item.to);
+    navigate(item.to, item.state ? { state: item.state } : undefined);
   };
   const close = (e: { preventDefault(): void; stopPropagation(): void }) => {
     e.preventDefault();

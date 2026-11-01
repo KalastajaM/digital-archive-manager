@@ -66,7 +66,7 @@ def save(app: AppDep, body: SavedSearchIn) -> dict:
 @router.patch("/{search_id}", response_model=SavedSearchOut)
 def rename(app: AppDep, search_id: int, body: SavedSearchRenameIn) -> dict:
     """Rename a saved search. 404 when it is gone, 409 when another has the name."""
-    return asdict(_guard(lambda: app.saved_searches.rename(search_id, body.name)))
+    return asdict(_guard(lambda: app.saved_searches.set_name(search_id, body.name)))
 
 
 @router.delete("/{search_id}", response_model=SavedSearchDeletedOut)
