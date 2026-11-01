@@ -22,6 +22,12 @@ All notable changes are listed here. The format follows
 - A filter takes a comma list of values, any of which may match: `type:pdf,docx`,
   `tag:insurance,medical`.
 
+### Changed
+
+- Today's Starred section now looks like the tray lists: the same font, row height and
+  box. Missing and To Delete hints sit under the name, and a long name keeps its
+  Important mark in view.
+
 ## [1.0.0] - 2026-11-01
 
 The 1.0 release. In short:

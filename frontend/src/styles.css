@@ -1776,9 +1776,6 @@ dialog.sheet.ai-sheet { width: min(720px, 92vw); }
 .entries li.checked .mark-icon, .member[aria-current="true"] .mark-icon, .inbox-list li.highlighted .mark-icon, .tray-items > li[aria-current="true"] .mark-icon { color: inherit; }
 .sidebar-important { display: inline-flex; }
 .sidebar-starred { display: inline-flex; }
-.starred-list li { flex-direction: row; align-items: center; gap: var(--sp-2); }
-.starred-list .starred-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.starred-list .starred-name[data-quicklook]:focus-visible { outline: 2px solid var(--focus-ring); border-radius: var(--r-sm); }
 .starred-actions { display: inline-flex; gap: 2px; flex: none; }
 .starred-list .starred-actions { opacity: 0; transition: opacity var(--motion) var(--ease); }
 .starred-list li:hover .starred-actions, .starred-list li:focus-within .starred-actions { opacity: 1; }
@@ -3423,6 +3420,14 @@ a.tn-start:hover { background: var(--accent-hover); }
 .tn-rows .today-row-main { min-width: 0; }
 .tn-rows .today-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tn-rows .today-more { padding: 8px 0; }
+/* Starred's rows: a list; the name ellipsizes beside its marks, the buttons on hover keep the row's height */
+ul.starred-list { list-style: none; margin: 0; }
+.starred-list .today-row { align-items: center; }
+.starred-list .today-row-title { display: flex; align-items: center; gap: var(--sp-1); }
+.starred-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.starred-name[data-quicklook]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: var(--r-sm); }
+.starred-actions .icon-button { width: 22px; height: 22px; margin-block: -2px; }
+.starred-actions .icon-button-glyph svg { width: 15px; height: 15px; }
 
 /* The Inbox summary */
 .tn-recog { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--meter-track); }
@@ -3432,12 +3437,10 @@ a.tn-start:hover { background: var(--accent-hover); }
 .tn-late { color: var(--red-text); }
 .tn-section .ai-unrecognised { margin: 0; font-size: var(--fs-sm); }
 
-/* Collections and Starred as plain lists */
-.tn-section .today-list:not(.starred-list) { border: 1px solid var(--hairline); border-radius: var(--r-xl); }
-.tn-section .today-list:not(.starred-list) li { padding: 10px 14px; gap: 2px; }
-.tn-section .today-list:not(.starred-list) li:first-child { border-top: 0; }
-.tn-section .starred-list { display: flex; flex-direction: column; gap: 6px; }
-.tn-section .starred-list li { padding: 0; border-top: 0; }
+/* Collections as a plain list */
+.tn-section .today-list { border: 1px solid var(--hairline); border-radius: var(--r-xl); }
+.tn-section .today-list li { padding: 10px 14px; gap: 2px; }
+.tn-section .today-list li:first-child { border-top: 0; }
 .today-slot .tn-head[draggable="true"] { cursor: grab; }
 
 .today-sub { font-size: var(--fs-md); }
@@ -3470,7 +3473,6 @@ a.tn-start:hover { background: var(--accent-hover); }
 .found-row .today-row-sub { font-family: var(--font-mono); font-size: 11.5px; }
 .found-row button { flex: none; }
 .today-list a { font-weight: 500; }
-.starred-list a, .starred-name { font-family: var(--font-mono); font-size: 12.5px; }
 
 /* The inbox's age bar: a thin rounded track with its legend in mono */
 .age-bar-track { height: 8px; border-radius: 4px; }

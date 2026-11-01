@@ -594,6 +594,33 @@ describe("Starred card and the Important notice (stars)", () => {
     expect(await screen.findByRole("dialog", { name: "Quick Look: 2026_Plan.xlsx" })).toBeInTheDocument();
   });
 
+  it("a row wears the tray-row markup: the hints sit under the name, a long name has its tooltip and keeps its mark", async () => {
+    const long = `${"Very_long_name_".repeat(12)}.pdf`;
+    renderToday({
+      "GET /api/marks/collection/starred": {
+        body: {
+          ...STARRED,
+          members: [
+            member("l", `20. Plans/${long}`, { marks: ["starred", "important"] }),
+            member("m", "20. Plans/gone.pdf", { missing: true }),
+            member("q", "##. To Delete/old.pdf", { quarantined: true }),
+          ],
+        },
+      },
+    });
+    const list = await within(await screen.findByRole("region", { name: "Starred" })).findByRole("list", { name: "Starred files" });
+    expect(list).toHaveClass("tn-rows");
+    const [gone, old, longRow] = within(list).getAllByRole("listitem"); // A–Z
+    for (const row of [gone, old, longRow]) expect(row).toHaveClass("today-row");
+    const link = within(longRow).getByRole("link", { name: long });
+    expect(link).toHaveAttribute("title", `Show 20. Plans/${long} in Browse`);
+    // the mark is beside the name, not inside what the ellipsis cuts
+    expect(link.querySelector(".mark-icons")).toBeNull();
+    expect(within(longRow).getByRole("img", { name: "Important" })).toBeInTheDocument();
+    expect(gone.querySelector(".today-row-sub")).toHaveTextContent("missing");
+    expect(old.querySelector(".today-row-sub")).toHaveTextContent("in ##. To Delete");
+  });
+
   it("folds to a count while arranging, and says when nothing is starred", async () => {
     const { user, view } = renderToday({ "GET /api/marks/collection/starred": { body: STARRED } });
     const starred = await screen.findByRole("region", { name: "Starred" });
