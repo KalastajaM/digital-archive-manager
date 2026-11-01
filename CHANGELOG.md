@@ -6,6 +6,14 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Search takes `-word` and `NOT word` to leave out files with a word, `kela OR kelan`
+  for either word, `"two words"` for a phrase and `word*` for a prefix. `AND` may be
+  typed and changes nothing.
+- A filter takes a comma list of values, any of which may match: `type:pdf,docx`,
+  `tag:insurance,medical`.
+
 ## [1.0.0] - 2026-11-01
 
 The 1.0 release. In short:
