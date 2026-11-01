@@ -14,7 +14,6 @@ import {
   type RuleIn,
   useAreaPicture,
   useAreasFor,
-  useRuleExplain,
   usePage1,
   usePage1Lines,
   useFileSuggestions,
@@ -110,23 +109,13 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
   const rules = useRules(active);
   const rule = ruleId ? (rules.data?.rules.find((r) => r.id === ruleId) ?? null) : null;
   // the areas behind the suggestion: shown unless the owner turned them off
-  // the rule being tested, or else the suggestion's areas plus, for diagnosis, the areas of
-  // picture rules that only their picture held back (their best place and score here, or
-  // why no score could be worked out); a rule whose words do not fit draws nothing
+  // the rule being tested, or else the suggestion's areas; a rule that did not match draws
+  // nothing here (its score and best place are in its test and in Test a document)
   const tested = useAreasFor(tool.testRule, driveId, active && tool.testRule !== undefined);
-  // only an archive with a picture rule asks (the explanation is a look at every rule)
-  const hasPictureRules = rules.data?.rules.some((r) => r.when.zones.some((z) => z.image)) ?? false;
-  const explained = useRuleExplain(driveId, active && tool.testRule === undefined && hasPictureRules);
-  const areas = useMemo(() => {
-    if (tool.testRule !== undefined) return tested.data?.areas ?? [];
-    const own = suggestion?.areas ?? [];
-    const seen = new Set(own.map((a) => `${a.rule_id}:${a.index}`));
-    const more = (explained.data ?? [])
-      .filter((x) => x.picture_miss)
-      .flatMap((x) => x.areas)
-      .filter((a) => !seen.has(`${a.rule_id}:${a.index}`));
-    return [...own, ...more];
-  }, [tool.testRule, tested.data, suggestion?.areas, explained.data]);
+  const areas = useMemo(
+    () => (tool.testRule !== undefined ? (tested.data?.areas ?? []) : (suggestion?.areas ?? [])),
+    [tool.testRule, tested.data, suggestion?.areas],
+  );
   const personLine = suggestion?.person_line ?? null;
   const [areasOn, setAreasOn] = useState<boolean | null>(null);
   const showAreas = areasOn ?? areas.length > 0;
@@ -193,7 +182,7 @@ function useBoxTool(driveId: string, tool: BoxTool, pageOne: boolean, splitNote:
         <IconButton
           icon={<Layers />}
           label="Show areas"
-          tip="Show the areas behind the suggestion, and the score of picture rules that did not match"
+          tip="Show the areas behind the suggestion"
           pressed={showAreas}
           onClick={() => setAreasOn(!showAreas)}
         />

@@ -32,6 +32,9 @@ All notable changes are listed here. The format follows
 - Today's Starred section now looks like the tray lists: the same font, row height and
   box. Missing and To Delete hints sit under the name, and a long name keeps its
   Important mark in view.
+- A preview no longer draws the areas of a picture rule that did not match. A rule with
+  only a picture area drew them on every file in the Inbox. Its score and best place are
+  still in the rule's test and in **Test a document**.
 
 ## [1.0.0] - 2026-11-01
 

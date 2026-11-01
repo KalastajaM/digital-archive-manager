@@ -757,12 +757,10 @@ inbox before the rest; a document without one is listed under **Could not be jud
 Every path in the test result is a button. It opens the document in the preview with the
 rule you are testing drawn on its first page: its areas, and for a picture area the place
 where it fits best with its score. When a picture rule finds nothing, open a letter you
-know it should match and read the score and the place the picture was found. In any
-preview with the box tool (Inbox, Browse, Quick Look, the viewer), the areas of a picture
-rule that only its picture held back (its words and other conditions fit the document) are
-drawn dashed too, with the score they got on that document, or the reason there is none (for
-example that the picture of page 1 is not made yet). A picture rule whose words do not fit
-the document draws nothing there.
+know it should match and read the score and the place the picture was found. A rule that
+did not match draws nothing in an ordinary preview; **Test a document** in Settings →
+Filing rules also shows its areas, with the score or the reason there is none (for example
+that the picture of page 1 is not made yet).
 
 The test runs in the background and fills in as it goes: "Checked 1 240 of 10 875
 documents…" with a **Stop** button. It looks at the likely documents first (the ones you

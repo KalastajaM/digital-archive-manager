@@ -2449,15 +2449,6 @@ export const useAreasFor = (rule: RuleIn | undefined, driveId: string, enabled =
     enabled,
   });
 
-/** Which rules match a document and why not (their areas, with the score of a picture
- * area), as a query: for diagnosing a picture rule on a document. */
-export const useRuleExplain = (driveId: string, enabled = true) =>
-  useQuery({
-    queryKey: [...keys.file, driveId, "explain"],
-    queryFn: () => apiPost("/api/rules/explain", { body: { drive_id: driveId } }),
-    enabled,
-  });
-
 /** Save a rule (``replaces``: the id of the rule this one takes the place of;
  * ``placeAbove``: for a new rule, the learned rule it goes directly above); a 400 says why not. */
 export const useSaveRule = () => {
