@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, positiveTags, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
+import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, positiveTags, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, typedFilter, typedList, withFilter } from "./searchFilters";
 
 const f = (name: FilterName, value: string, negated = false) => ({ name, value, negated });
 
@@ -50,6 +50,16 @@ describe("tokens and queries", () => {
     expect(filters.map(filterToken)).toEqual(["type:pdf,docx", 'in:"Bills, 2026"']);
     expect(filterToken(f("collection", "Bills,2026"))).toBe('collection:"Bills,2026"');
     expect(readQuery("-tag:a,b").filters).toEqual([{ ...f("tag", "a,b", true), anyOf: true }]);
+  });
+
+  it("reads a filter being typed as a list, unless it is quoted", () => {
+    const partial = (text: string) => splitSearch(text).partial!;
+    expect(typedList(partial("type:pdf,do"))).toEqual({ chosen: ["pdf"], last: "do" });
+    expect(typedList(partial("type:do"))).toEqual({ chosen: [], last: "do" });
+    expect(typedList(partial('in:"Bills, 20'))).toEqual({ chosen: [], last: "Bills, 20" });
+    expect(typedFilter(partial("-type:pdf,docx"))).toEqual({ ...f("type", "pdf,docx", true), anyOf: true });
+    expect(typedFilter(partial("type:pdf,"))).toEqual(f("type", "pdf"));
+    expect(typedFilter(partial("type:"))).toBeNull();
   });
 
   it("serializes the words first, then the filters, and reads them back", () => {

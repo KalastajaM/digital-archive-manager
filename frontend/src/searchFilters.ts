@@ -110,6 +110,23 @@ export function splitSearch(text: string): SearchText {
   return { rest, kept, filters, partial };
 }
 
+/** The value of a filter being typed, as a list: the values before the last comma, and
+ * the one still being typed. A quoted value is one value, whatever it holds. */
+export function typedList(partial: PartialFilter): { chosen: string[]; last: string } {
+  if (partial.quoted) return { chosen: [], last: partial.value };
+  const parts = partial.value.split(",");
+  const last = parts.pop() ?? "";
+  return { chosen: parts.map((p) => p.trim()).filter(Boolean), last };
+}
+
+/** A filter being typed, taken as it stands (null with no value yet). */
+export function typedFilter(partial: PartialFilter): SearchFilter | null {
+  const { chosen, last } = typedList(partial);
+  const values = last.trim() ? [...chosen, last.trim()] : chosen;
+  if (values.length === 0) return null;
+  return { name: partial.name, negated: partial.negated, value: values.join(","), ...(values.length > 1 ? { anyOf: true } : {}) };
+}
+
 /** A filter as it is typed (quoted when the value has spaces, or a comma that is not a list). */
 export function filterToken(f: SearchFilter): string {
   const value = f.value.replace(/"/g, "");
