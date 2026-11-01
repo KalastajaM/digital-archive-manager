@@ -495,3 +495,36 @@ def test_id_star_leaves_out_your_own_business_id(with_ids):
     packs.activate(packs.build(["fi"], ["en"], own_ids=["0112038-9"]))
     assert ids(with_ids, "id:*") == []
     assert ids(with_ids, "id:0112038-9") == ["bill", "tax"]  # asked for by its value: found
+
+
+# --- comma lists: any of the values -------------------------------------------------------
+
+
+def test_a_comma_list_wants_any_of_its_values(archive):
+    assert ids(archive, "type:docx,xlsx") == ["doc", "sheet"]
+    assert ids(archive, "type:image,sheet") == ["sale2", "sheet", "xray"]
+    assert ids(archive, "-type:pdf,image") == ["doc", "sheet"]  # negated: none of them
+    assert ids(archive, "date:2024,2026-10") == ["doc", "kela"]
+
+
+def test_a_comma_list_of_tags_is_one_tag_either_of_them(archive):
+    archive.tags.add("kela", ["insurance"])
+    archive.tags.add("doc", ["medical"])
+    archive.tags.add("bill", ["paid"])
+    assert ids(archive, "tag:insurance,medical") == ["doc", "kela"]
+    assert ids(archive, "tag:insurance,nope") == ["kela"]  # an unknown one adds nothing
+    assert ids(archive, "tag:nope,nada") == []
+    assert ids(archive, "tag:insurance,medical tag:paid") == []  # still AND between filters
+    assert "kela" not in ids(archive, "-tag:insurance,medical")
+    assert "doc" not in ids(archive, "-tag:insurance,medical")
+
+
+def test_a_quoted_comma_is_part_of_the_value(archive, fake_archive):
+    fake_archive.add("30. Bills, 2026/x.pdf", drive_id="comma")
+    scan(archive.paths, archive.repo)
+    assert ids(archive, 'in:"30. Bills, 2026"') == ["comma"]
+
+
+def test_words_with_operators_and_filters(archive):
+    assert ids(archive, "reimbursement -lisa") == ["kela"]
+    assert ids(archive, f'decision OR plain in:"{MEDICAL}"') == ["doc", "kela", "xray"]

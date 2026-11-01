@@ -15,6 +15,11 @@ All notable changes are listed here. The format follows
   Delete (with Undo) are in the row's right-click menu. The **?** search help lists them
   as your own examples, and the palette (⌘K) finds them by name. New endpoints under
   `/api/saved-searches` and the table `saved_searches` (migration 0048).
+- Search takes `-word` and `NOT word` to leave out files with a word, `kela OR kelan`
+  for either word, `"two words"` for a phrase and `word*` for a prefix. `AND` may be
+  typed and changes nothing.
+- A filter takes a comma list of values, any of which may match: `type:pdf,docx`,
+  `tag:insurance,medical`.
 
 ## [1.0.0] - 2026-11-01
 

@@ -9,7 +9,9 @@
 export const FILTER_NAMES = ["name", "in", "tag", "collection", "from", "for", "id", "iban", "domain", "type", "date", "before", "after", "tray", "is"] as const;
 export type FilterName = (typeof FILTER_NAMES)[number];
 
-export type SearchFilter = { name: FilterName; value: string; negated: boolean };
+/** ``anyOf``: typed unquoted with commas (``type:pdf,docx``), so it stays a list of values
+ * any of which may match; a value with a comma but no ``anyOf`` is quoted as one value. */
+export type SearchFilter = { name: FilterName; value: string; negated: boolean; anyOf?: boolean };
 export type PartialFilter = SearchFilter & { quoted: boolean };
 
 export type SearchText = {
@@ -101,17 +103,18 @@ export function splitSearch(text: string): SearchText {
       break;
     }
     const trimmed = value.trim();
-    if (trimmed) filters.push({ name: h.name, negated: h.negated, value: trimmed });
+    if (trimmed) filters.push({ name: h.name, negated: h.negated, value: trimmed, ...(!quoted && trimmed.includes(",") ? { anyOf: true } : {}) });
     if (isSpace(text[j])) j++; // the space that ended the token goes with it
     i = j;
   }
   return { rest, kept, filters, partial };
 }
 
-/** A filter as it is typed (quoted when the value has spaces). */
+/** A filter as it is typed (quoted when the value has spaces, or a comma that is not a list). */
 export function filterToken(f: SearchFilter): string {
   const value = f.value.replace(/"/g, "");
-  return `${f.negated ? "-" : ""}${f.name}:${/\s/.test(value) || value === "" ? `"${value}"` : value}`;
+  const quote = /\s/.test(value) || value === "" || (value.includes(",") && !f.anyOf);
+  return `${f.negated ? "-" : ""}${f.name}:${quote ? `"${value}"` : value}`;
 }
 
 export const sameFilter = (a: SearchFilter, b: SearchFilter) =>

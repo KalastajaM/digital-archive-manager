@@ -1925,7 +1925,14 @@ the command line: `dam errors [--all] [--retry]`.
     prefix of the file name, else the modified time; `after` includes the first day of the
     period, `before` excludes it), `tray` (open items, by tray id or name) and `is`
     (`starred`, `important`, `locked`, `todo`, `note`, `summary`). A `-` in front excludes.
-    Values with spaces are quoted. Every filter must hold. A name before the colon that is
+    Values with spaces are quoted. An unquoted value with commas is a list, any of which
+    may match (`type:pdf,docx`; `tag:a,b` is one tag filter, either tag; with `-` none of
+    them); in quotes a comma is part of the value. Every filter must hold. Words: all must
+    match; `"a b"` is a phrase, `word*` a prefix (the last wanted word always is, unless it
+    is a closed phrase), `-word` / `NOT word` excludes files with it (a `NOT IN` over
+    `file_fts`, so it works with no other words), `a OR b` wants either, binding tighter
+    than the implicit AND, and `AND` is ignored. Only the capital forms are operators; no
+    brackets. `NOT` before a filter negates it. A name before the colon that is
     not a filter is a plain word. A bad value (a date that does not exist, an unknown `is`
     word, a filter with no value) is a 400 with the reason; a tag, collection or tray that
     does not exist matches nothing (a `-` filter on it excludes nothing). `tag` (repeat it)

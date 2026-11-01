@@ -44,6 +44,14 @@ describe("tokens and queries", () => {
     expect(tagFilter("tax return")).toBe('tag:"tax return"');
   });
 
+  it("keeps an unquoted comma list a list, and quotes a comma inside one value", () => {
+    const { filters } = splitSearch('type:pdf,docx in:"Bills, 2026" x');
+    expect(filters).toEqual([{ ...f("type", "pdf,docx"), anyOf: true }, f("in", "Bills, 2026")]);
+    expect(filters.map(filterToken)).toEqual(["type:pdf,docx", 'in:"Bills, 2026"']);
+    expect(filterToken(f("collection", "Bills,2026"))).toBe('collection:"Bills,2026"');
+    expect(readQuery("-tag:a,b").filters).toEqual([{ ...f("tag", "a,b", true), anyOf: true }]);
+  });
+
   it("serializes the words first, then the filters, and reads them back", () => {
     const filters = [f("tag", "a b"), f("is", "locked", true)];
     const text = serializeQuery("kela  letter", filters);

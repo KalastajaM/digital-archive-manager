@@ -2088,9 +2088,12 @@ export default function Browse() {
   const finishTyped = () => {
     const partial = typed.partial;
     if (!partial) return false;
-    const values = offered.filter((c) => c.kind === "value");
+    // a comma list (type:pdf,docx) is taken as typed: a suggestion would replace all of it
+    const list = !partial.quoted && partial.value.includes(",");
+    const values = list ? [] : offered.filter((c) => c.kind === "value");
     const exact = values.find((c) => c.filter.value.toLowerCase() === partial.value.trim().toLowerCase());
-    const chosen = (exact ?? values[0])?.filter ?? (partial.value.trim() ? { name: partial.name, negated: partial.negated, value: partial.value.trim() } : null);
+    const typedFilter = { name: partial.name, negated: partial.negated, value: partial.value.trim(), ...(list ? { anyOf: true } : {}) };
+    const chosen = (exact ?? values[0])?.filter ?? (partial.value.trim() ? typedFilter : null);
     if (!chosen) return false;
     addFilters([chosen], typed.rest.trim());
     setQuery(typed.rest);

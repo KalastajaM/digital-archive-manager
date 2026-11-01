@@ -1435,6 +1435,20 @@ words, which search file names, paths and the text of the files, and **filters**
 form `name:value`. The **?** next to the box lists them; a click on an example puts it in
 the box. A search with only filters lists the matching files by name.
 
+Plain words must all be found. A few forms change that:
+
+| Type | Finds | Example |
+|---|---|---|
+| `"two words"` | The words together, in this order. | `"annual report"` |
+| `word*` | Words that start so. The last word you type is always taken this way, as you type it. | `vakuut*` |
+| `-word` or `NOT word` | Leaves out files that have the word (or the quoted phrase). | `kela -lasku`, `NOT draft` |
+| `a OR b` | Files with either word. OR joins the words on each side of it only: `vakuutus kela OR if` needs `vakuutus` and one of `kela` and `if`. | `kela OR kelan` |
+| `AND` | Nothing more than a space does; it can be typed. | `kela AND lasku` |
+
+Only the capital forms `AND`, `OR` and `NOT` are operators; `and`, `or` and `not` are
+searched as words, and so is `"OR"` in quotes. There are no brackets. A word that starts
+with a dash (`-5%`) needs quotes to be searched: `"-5%"`.
+
 | Filter | Finds | Example |
 |---|---|---|
 | `name:` | Words in the file name only. `*` stands for any text and `?` for one character. Without a `*` or `?` the text can be anywhere in the name; with one, the pattern must fit the whole name. | `name:*kela*`, `name:2026*` |
@@ -1458,6 +1472,9 @@ Tips:
 - Put a value with spaces in quotes: `in:"50. Medical"`.
 - A `-` in front leaves out what matches, for any filter: `-tag:paid`,
   `-in:"90. Other People"`.
+- A comma lists values, any of which may match: `type:pdf,docx`, `from:Kela,Telia`,
+  `tag:insurance,medical`. With a `-` none of them may: `-type:pdf,image`. In quotes the
+  comma is part of the value: `in:"30. Bills, 2026"`.
 - Filters combine with each other (a file must satisfy all of them) and with words:
   `kela type:pdf after:2025`. Two `tag:` filters need both tags unless you pick **Any**
   in the filter row, which asks for at least one.
