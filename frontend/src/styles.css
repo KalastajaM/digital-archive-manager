@@ -1512,6 +1512,7 @@ button.group-toggle > *, .member-row > * { pointer-events: none; } /* the button
   background: var(--panel-2); color: var(--text); border-radius: var(--r-lg);
   font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.5;
   white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4;
+  -webkit-user-select: text; user-select: text;
 }
 .thumb-frame {
   display: flex; align-items: flex-start; justify-content: center; overflow: auto;

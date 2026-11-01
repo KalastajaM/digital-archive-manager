@@ -8,6 +8,10 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Show text** in a file's preview toolbar shows the text read from the file, OCR
+  included, so it can be selected and copied (⌘C or the right-click menu). **Search for
+  selection** finds the files with the selected text as a phrase. New endpoint
+  `GET /api/files/{drive_id}/indexed-text`.
 - **Saved searches.** **Save search…** in Browse's filter row keeps the search under a
   name. They are listed in the sidebar under **Searches** with the number of files each
   finds now (up to 500+); a click opens Browse with the search, and the row's tooltip

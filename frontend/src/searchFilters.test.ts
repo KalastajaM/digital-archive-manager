@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, positiveTags, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, withFilter } from "./searchFilters";
+import { FILTER_HELP, type FilterName, IS_VALUES, filterToken, phraseQuery, positiveTags, readQuery, sameFilter, serializeQuery, splitSearch, tagFilter, wholeWords, withFilter } from "./searchFilters";
 
 const f = (name: FilterName, value: string, negated = false) => ({ name, value, negated });
 
@@ -89,5 +89,47 @@ describe("is:disconnected", () => {
 describe("tag:*", () => {
   it("is not counted as a tag for All / Any", () => {
     expect(positiveTags(splitSearch("tag:* tag:paid ").filters).map((f) => f.value)).toEqual(["paid"]);
+  });
+});
+
+describe("phraseQuery", () => {
+  it("makes one phrase of the selection, across lines", () => {
+    expect(phraseQuery("  Kelan\r\n päätös\t2026 ")).toBe('"Kelan päätös 2026"');
+  });
+
+  it("stays plain words: quotes and colons cannot make a filter", () => {
+    const q = phraseQuery('Asiakas tag:paid "Name: Tiina"');
+    expect(q).toBe('"Asiakas tag paid Name Tiina"');
+    expect(readQuery(q).filters).toEqual([]);
+  });
+
+  it("drops the marks of hidden characters", () => {
+    expect(phraseQuery("osa⟨U+00AD⟩maksu")).toBe('"osamaksu"');
+  });
+
+  it("cuts a long selection at a word", () => {
+    const q = phraseQuery("sana ".repeat(100));
+    expect(q.length).toBeLessThanOrEqual(202);
+    expect(q.endsWith('sana"')).toBe(true);
+  });
+
+  it("is empty without a letter or a digit", () => {
+    expect(phraseQuery(" -- ")).toBe("");
+    expect(phraseQuery("")).toBe("");
+  });
+});
+
+describe("wholeWords", () => {
+  const text = "Kelan päätös 2026";
+  it("widens a cut word at either end", () => {
+    expect(wholeWords(text, 2, 9)).toBe("Kelan päätös");
+  });
+  it("leaves whole words and the spaces around them", () => {
+    expect(wholeWords(text, 6, 12)).toBe("päätös");
+    expect(wholeWords(text, 5, 13)).toBe(" päätös ");
+  });
+  it("stops at the ends of the text", () => {
+    expect(wholeWords(text, 0, 1)).toBe("Kelan");
+    expect(wholeWords(text, 14, 15)).toBe("2026");
   });
 });

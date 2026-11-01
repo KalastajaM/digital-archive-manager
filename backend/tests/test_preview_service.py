@@ -7,8 +7,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, insert
 
 from dam.api import create_api
+from dam.api.routers.files import INDEXED_TEXT_MAX_CHARS
+from dam.db.engine import write_tx
+from dam.db.tables import file_text
 from dam.services import preview
 
 BASE = "http://127.0.0.1:8765"
@@ -292,3 +296,38 @@ def test_thumbnail_not_rendered_for_a_disconnected_request(app, ql, doc):
 def test_thumb_route_documents_503(app):
     op = create_api(app).openapi()["paths"]["/api/files/{drive_id}/thumb.png"]["get"]
     assert "503" in op["responses"]
+
+
+def _index_text(app, drive_id: str, body: str, ocr_used: bool = False) -> None:
+    with write_tx(app.engine) as conn:
+        conn.execute(delete(file_text).where(file_text.c.drive_id == drive_id))
+        conn.execute(insert(file_text), {"drive_id": drive_id, "text": body, "ocr_used": ocr_used})
+
+
+def test_indexed_text_is_what_was_read(app, client, doc):
+    _index_text(app, doc, "Kela päätös 2026")
+    r = client.get(f"/api/files/{doc}/indexed-text")
+    assert r.status_code == 200
+    assert r.json() == {"text": "Kela päätös 2026", "truncated": False, "ocr_used": False}
+
+
+def test_indexed_text_says_when_it_came_from_ocr(app, client, doc):
+    _index_text(app, doc, "scanned words", ocr_used=True)
+    assert client.get(f"/api/files/{doc}/indexed-text").json()["ocr_used"] is True
+
+
+def test_indexed_text_is_empty_when_none_was_read(client, doc):
+    r = client.get(f"/api/files/{doc}/indexed-text")
+    assert r.status_code == 200
+    assert r.json() == {"text": "", "truncated": False, "ocr_used": False}
+
+
+def test_indexed_text_is_capped(app, client, doc):
+    _index_text(app, doc, "ä" * (INDEXED_TEXT_MAX_CHARS + 1))
+    data = client.get(f"/api/files/{doc}/indexed-text").json()
+    assert data["truncated"] is True
+    assert len(data["text"]) == INDEXED_TEXT_MAX_CHARS
+
+
+def test_indexed_text_of_an_unknown_file_is_404(client):
+    assert client.get("/api/files/nope/indexed-text").status_code == 404

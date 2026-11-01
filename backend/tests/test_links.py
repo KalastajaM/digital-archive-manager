@@ -14,7 +14,7 @@ from PIL import Image
 from dam.api import create_api
 from dam.core.fs import readlink
 from pdfs import make_text_pdf
-from test_preview_service import PNG, FakeQl
+from test_preview_service import PNG, FakeQl, _index_text
 
 BASE = "http://127.0.0.1:8765"
 LOCAL_ORIGIN = {"Origin": BASE}
@@ -120,6 +120,16 @@ def test_text_follows_the_link(app, client, fake_archive):
     r = client.get(f"/api/files/{link_id(app, f'{HOUSES}/notes.txt')}/text")
     assert r.status_code == 200
     assert r.json() == {"text": "hello from the target", "truncated": False}
+
+
+def test_indexed_text_follows_the_link(app, client, fake_archive):
+    fake_archive.add(f"{DEEDS}/notes.txt", content=b"hello from the target", drive_id="n1")
+    fake_archive.link(f"{HOUSES}/notes.txt", f"{DEEDS}/notes.txt")
+    app.scan()
+    _index_text(app, "n1", "the target's words")
+    r = client.get(f"/api/files/{link_id(app, f'{HOUSES}/notes.txt')}/indexed-text")
+    assert r.status_code == 200
+    assert r.json()["text"] == "the target's words"
 
 
 def test_text_follows_the_target_type_not_the_link_name(app, client, fake_archive):

@@ -26,6 +26,7 @@ from dam.api.schemas import (
     FileTagsIn,
     FileTagsOut,
     IdentifiersOut,
+    IndexedTextOut,
     Page1BoxIn,
     Page1Out,
     RelativeMarkIn,
@@ -50,6 +51,8 @@ from dam.services.preview import (
 from dam.services.relatives import MAX_RELATIVES
 
 router = APIRouter(prefix="/api/files", tags=["files"])
+
+INDEXED_TEXT_MAX_CHARS = 1_000_000
 
 # Served bytes may be HTML or SVG from the archive: never sniffed, never run as the app.
 RAW_HEADERS = {
@@ -395,6 +398,19 @@ def text_preview(
     link: its target's)."""
     text, truncated = app.previews.text(shown_record(app, drive_id), max)
     return {"text": text, "truncated": truncated}
+
+
+@router.get("/{drive_id}/indexed-text", response_model=IndexedTextOut)
+def indexed_text(app: AppDep, drive_id: str) -> dict:
+    """The text read from the file when it was indexed, OCR included (a link: its
+    target's), at most ``INDEXED_TEXT_MAX_CHARS``. Empty when none was read."""
+    rec = shown_record(app, drive_id)
+    text = app.repo.text_for(rec.drive_id)
+    return {
+        "text": text[:INDEXED_TEXT_MAX_CHARS],
+        "truncated": len(text) > INDEXED_TEXT_MAX_CHARS,
+        "ocr_used": bool(app.repo.text_was_ocrd(rec.drive_id)),
+    }
 
 
 _NOT_MACOS = {501: {"model": ErrorBody}}  # only these routes can answer 501

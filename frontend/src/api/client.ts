@@ -177,6 +177,7 @@ export type IndexSummary = Schemas["IndexSummaryOut"];
 export type TrayDefaultsDiff = Schemas["TrayDefaultsDiffOut"];
 export type TrayDefaultAdded = Schemas["TrayDefaultAddedOut"];
 export type TextPreview = Schemas["TextPreviewOut"];
+export type IndexedText = Schemas["IndexedTextOut"];
 export type AIStatus = Schemas["AIStatusOut"];
 export type AIPrepared = Schemas["PreparedOut"];
 export type AIRunResult = Schemas["RunOut"];
@@ -431,6 +432,10 @@ export const thumbUrl = (driveId: string, width: ThumbWidth = 1200) => `${fileUr
 /** The start of a text-like file (404 for other types). */
 export const fetchTextPreview = (driveId: string, signal?: AbortSignal) =>
   apiGet("/api/files/{drive_id}/text", { path: { drive_id: driveId }, signal });
+
+/** The text read from a file when it was indexed (empty when none was). */
+export const fetchIndexedText = (driveId: string, signal?: AbortSignal) =>
+  apiGet("/api/files/{drive_id}/indexed-text", { path: { drive_id: driveId }, signal });
 
 /** Open the file in its default macOS app, or show it in Finder (204; 409 for apps and
  * scripts, 404 when it is gone, 501 off macOS). Plain calls, not mutations: previews
