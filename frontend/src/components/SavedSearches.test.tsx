@@ -120,6 +120,36 @@ function browse(url: string, extra: Parameters<typeof mockFetch>[0] = {}) {
   return { calls, user: userEvent.setup() };
 }
 
+describe("Update to current search", () => {
+  it("replaces the query with the search Browse shows, with Undo", async () => {
+    const { calls, user } = sidebar("/browse?q=id%3A*+-from%3A*+type%3Apdf", {
+      "POST /api/saved-searches": { body: { id: 1, name: "Sender not set", query: "id:* -from:* type:pdf", tag_mode: "all" } },
+    });
+    const row = await within(nav()).findByRole("link", { name: "Sender not set (12)" });
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    await user.click(await screen.findByRole("menuitem", { name: "Update to current search" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Sender not set", query: "id:* -from:* type:pdf", tag_mode: "all", replace: true }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "POST").at(-1)?.body).toEqual({ name: "Sender not set", query: "id:* -from:*", tag_mode: "all", replace: true }),
+    );
+  });
+
+  it("is greyed when Browse shows no search, or this one", async () => {
+    const { user } = sidebar("/browse?q=-from%3A*+id%3A*");
+    await user.pointer({ keys: "[MouseRight]", target: await within(nav()).findByRole("link", { name: "Sender not set (12)" }) });
+    const same = await screen.findByRole("menuitem", { name: "Update to current search" });
+    expect(same).toBeDisabled();
+    expect(same).toHaveAccessibleDescription("Browse shows this search already");
+    cleanup();
+    const again = sidebar("/");
+    await again.user.pointer({ keys: "[MouseRight]", target: await within(nav()).findByRole("link", { name: "Sender not set (12)" }) });
+    expect(await screen.findByRole("menuitem", { name: "Update to current search" })).toHaveAccessibleDescription("Open a search in Browse first");
+  });
+});
+
 describe("Save search… in Browse", () => {
   it("saves the search as on screen under a name", async () => {
     const { calls, user } = browse("/browse?q=kela+tag%3Abills", {

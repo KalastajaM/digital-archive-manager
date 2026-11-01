@@ -1504,7 +1504,9 @@ search palette (⌘K) finds saved searches by name.
 
 - **Change one**: open it, change the words or chips, and **Save search…** again. Its name
   is filled in already; saving under it asks **Replace** before it overwrites. A new name
-  saves a second search.
+  saves a second search. Or right-click its row in the sidebar and choose **Update to
+  current search**: the search Browse shows now becomes its query, with **Undo** in the
+  toast (greyed while Browse shows no search, or this one already).
 - **Rename…** and **Delete** are in the right-click menu of its row in the sidebar.
   Delete has **Undo** in its toast. Neither touches any file.
 - A saved search whose query no longer works (a date typed by hand that does not exist)
