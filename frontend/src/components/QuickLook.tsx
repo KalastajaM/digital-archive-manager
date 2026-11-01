@@ -199,6 +199,7 @@ export function QuickLook({ files, index, onIndex, onClose, status: given, trash
                 <MoveLink.Provider value={subjectLink}>
                   <FilePreview
                     file={compare.subject}
+                    beforeGoToTarget={onClose}
                     zoomControl={together ? zoomControl : subjectZoom}
                     showInFolder={compare.showInFolder && (() => compare.showInFolder?.(compare.subject))}
                   />

@@ -158,7 +158,7 @@ describe("FilePreview fallback", () => {
 
   it("text-like files show the text preview (hidden characters marked, lines kept)", async () => {
     const calls = mockFetch({ "GET /api/files/t1/text": { body: { text: "line one\nbad ‮name\tx", truncated: true } } });
-    renderWithProviders(<FilePreview file={txt} />);
+    renderWithProviders(<MemoryRouter><FilePreview file={txt} /></MemoryRouter>);
     const text = await screen.findByTestId("text-preview");
     expect(text.textContent).toBe("line one\nbad ⟨U+202E⟩name\tx");
     expect(screen.getByText(/Only the start of the file is shown/)).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe("FilePreview fallback", () => {
       "GET /api/files/t1/text": { status: 404, body: { error: "no text preview" } },
       "GET /api/files/t1/thumb.png": THUMB,
     });
-    renderWithProviders(<FilePreview file={txt} />);
+    renderWithProviders(<MemoryRouter><FilePreview file={txt} /></MemoryRouter>);
     const img = await screen.findByRole("img", { name: "Preview of notes.txt" });
     expect(img.getAttribute("src")).toMatch(/^blob:/);
     expect(thumbs(calls, "t1").map((c) => c.url)).toEqual(["/api/files/t1/thumb.png?width=1200"]);
@@ -262,7 +262,7 @@ describe("FilePreview fallback", () => {
     const r2 = renderWithProviders(<FilePreview file={jpg} />);
     expect(buttons()).toHaveLength(2);
     r2.unmount();
-    const r3 = renderWithProviders(<FilePreview file={txt} />);
+    const r3 = renderWithProviders(<MemoryRouter><FilePreview file={txt} /></MemoryRouter>);
     await screen.findByTestId("text-preview");
     expect(buttons()).toHaveLength(2);
     r3.unmount();
@@ -495,5 +495,135 @@ describe("FilePreview print", () => {
     expect(print).not.toHaveBeenCalled();
     expect(document.querySelector(".print-sheet")).toBeNull();
     print.mockRestore();
+  });
+});
+
+describe("FilePreview text view", () => {
+  const INDEXED = { body: { text: "Kela: päätös\r\nrivi kaksi", truncated: false, ocr_used: false } };
+  const select = (el: Element) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const s = document.getSelection()!;
+    s.removeAllRanges();
+    s.addRange(range);
+    fireEvent(document, new Event("selectionchange"));
+  };
+  const Where = () => {
+    const location = useLocation();
+    return <span data-testid="where">{location.pathname + location.search}</span>;
+  };
+  const inRouter = (ui: React.ReactElement) =>
+    renderWithProviders(
+      <MemoryRouter initialEntries={["/inbox"]}>
+        {ui}
+        <Where />
+      </MemoryRouter>,
+    );
+  const showText = () => fireEvent.click(screen.getByRole("button", { name: "Show text" }));
+
+  it("the toggle swaps the page for the indexed text and back", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    inRouter(<FilePreview file={pdf} />);
+    expect(screen.getByRole("button", { name: "Show text" })).toHaveAttribute("aria-pressed", "false");
+    showText();
+    const text = await screen.findByTestId("text-preview");
+    expect(text.textContent).toBe("Kela: päätös\nrivi kaksi");
+    expect(screen.queryByRole("img", { name: /page 1/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Show text" })).toHaveAttribute("aria-pressed", "true");
+    showText();
+    expect(page()).toBeInTheDocument();
+    expect(screen.queryByTestId("text-preview")).toBeNull();
+  });
+
+  it("asks for the text only when it is shown", () => {
+    const calls = mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    inRouter(<FilePreview file={pdf} />);
+    expect(calls.some((c) => c.url.includes("indexed-text"))).toBe(false);
+  });
+
+  it("a text file has no toggle: it shows its text already", async () => {
+    mockFetch({ "GET /api/files/t1/text": { body: { text: "hi", truncated: false } } });
+    inRouter(<FilePreview file={{ drive_id: "t1", path: "a/notes.txt", ext: "txt" }} />);
+    await screen.findByTestId("text-preview");
+    expect(screen.queryByRole("button", { name: "Show text" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Search for selection" })).toBeDisabled();
+  });
+
+  it("says so when no text was read, and when it came from OCR", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": { body: { text: "", truncated: false, ocr_used: false } } });
+    const { unmount } = inRouter(<FilePreview file={pdf} />);
+    showText();
+    expect(await screen.findByText("No text has been read from this file.")).toBeInTheDocument();
+    unmount();
+    mockFetch({ "GET /api/files/d1/indexed-text": { body: { text: "skannattu", truncated: true, ocr_used: true } } });
+    inRouter(<FilePreview file={pdf} />);
+    showText();
+    expect(await screen.findByText(/by OCR/)).toBeInTheDocument();
+    expect(screen.getByText(/Only the start of the text/)).toBeInTheDocument();
+  });
+
+  it("a failure to load is shown, with the tools still there", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": { status: 500, body: { error: "boom" } } });
+    inRouter(<FilePreview file={pdf} />);
+    showText();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Could not load the text/);
+    expect(screen.getByRole("button", { name: "Show text" })).toBeInTheDocument();
+  });
+
+  it("Search for selection waits for a selection, then opens Browse with the phrase", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    const before = vi.fn();
+    inRouter(<FilePreview file={pdf} beforeGoToTarget={before} />);
+    showText();
+    const text = await screen.findByTestId("text-preview");
+    const search = () => screen.getByRole("button", { name: "Search for selection" });
+    expect(search()).toBeDisabled();
+    select(text);
+    await waitFor(() => expect(search()).toBeEnabled());
+    fireEvent.click(search());
+    expect(before).toHaveBeenCalledOnce();
+    const q = new URLSearchParams(screen.getByTestId("where").textContent!.split("?")[1]).get("q");
+    expect(screen.getByTestId("where").textContent).toMatch(/^\/browse\?/);
+    expect(q).toBe('"Kela päätös rivi kaksi"');
+  });
+
+  it("a selection cut short searches for the whole words", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": { body: { text: "Verohallinto päätös 2024", truncated: false, ocr_used: false } } });
+    inRouter(<FilePreview file={pdf} />);
+    showText();
+    const node = (await screen.findByTestId("text-preview")).firstChild!;
+    const range = document.createRange();
+    range.setStart(node, 3);
+    range.setEnd(node, 16);
+    const s = document.getSelection()!;
+    s.removeAllRanges();
+    s.addRange(range);
+    fireEvent(document, new Event("selectionchange"));
+    const search = () => screen.getByRole("button", { name: "Search for selection" });
+    await waitFor(() => expect(search()).toBeEnabled());
+    fireEvent.click(search());
+    expect(new URLSearchParams(screen.getByTestId("where").textContent!.split("?")[1]).get("q")).toBe('"Verohallinto päätös"');
+  });
+
+  it("a selection elsewhere does not count", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    inRouter(
+      <>
+        <p>elsewhere</p>
+        <FilePreview file={pdf} />
+      </>,
+    );
+    showText();
+    await screen.findByTestId("text-preview");
+    select(screen.getByText("elsewhere"));
+    expect(screen.getByRole("button", { name: "Search for selection" })).toBeDisabled();
+  });
+
+  it("no search where there is no Browse (the viewer window); the text stays", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    inRouter(<FilePreview file={pdf} goToTarget={false} />);
+    showText();
+    await screen.findByTestId("text-preview");
+    expect(screen.queryByRole("button", { name: "Search for selection" })).toBeNull();
   });
 });
