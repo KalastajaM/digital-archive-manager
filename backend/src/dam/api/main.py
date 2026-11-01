@@ -28,6 +28,7 @@ from dam.api.routers import (
     notes,
     ongoing,
     rules,
+    saved_searches,
     settings,
     setup,
     special_folders,
@@ -214,6 +215,7 @@ ROUTERS = (
     settings,
     special_folders,
     tags,
+    saved_searches,
 )
 
 

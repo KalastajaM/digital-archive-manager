@@ -50,6 +50,7 @@ from dam.rules.jobs import ReplayJobs
 from dam.rules.learned import rule_file, write_rules_file
 from dam.rules.model import LEARNED_FILE, Rule, RuleError, load_rule_file, load_rules
 from dam.rules.picture import AREAS_DIR, Pictures
+from dam.saved_searches import SavedSearches
 from dam.search import SearchContext, SearchHit, search
 from dam.services.activity import ActivityService
 from dam.services.area_pictures import AreaPictures
@@ -214,6 +215,7 @@ class ServiceParts:
     scan_fields: ScanFieldService
     rule_record: RuleRecord
     tag_admin: TagAdmin
+    saved_searches: SavedSearches
     pictures: Pictures
     replay_jobs: ReplayJobs
     area_pictures: AreaPictures
@@ -359,6 +361,7 @@ def build_services(
         scan_fields=scan_fields,
         rule_record=rule_record,
         tag_admin=TagAdmin(engine),
+        saved_searches=SavedSearches(engine),
         pictures=pictures,
         replay_jobs=ReplayJobs(),  # rule tests that run in the background
         area_pictures=area_pictures,
@@ -422,6 +425,7 @@ class App:
     scan_fields: ScanFieldService = field(init=False)
     rule_record: RuleRecord = field(init=False)
     tag_admin: TagAdmin = field(init=False)
+    saved_searches: SavedSearches = field(init=False)
     pictures: Pictures = field(init=False)
     replay_jobs: ReplayJobs = field(init=False)
     area_pictures: AreaPictures = field(init=False)
