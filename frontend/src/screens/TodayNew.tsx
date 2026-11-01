@@ -20,6 +20,7 @@ import { useLocalClock } from "../components/RelativeDate";
 import { FoundList, NotRecognised } from "../components/today/InboxCard";
 import { ChangedFilesCard } from "../components/today/ChangedFiles";
 import { CollectionsCard, needingAttention, Notices, RemindersCard } from "../components/today/pieces";
+import { ItemStar } from "../components/MarkIcons";
 import { StarredCard } from "../components/today/StarredCard";
 import { countsOf, headlineOf, openLine, tilesOf } from "../components/today/summary";
 import { waited } from "../components/today/time";
@@ -111,9 +112,12 @@ function BillRow({
     <>
       <tr className="tn-bill" data-open={details || undefined} data-level={entry?.level} onContextMenu={onMenu}>
         <td className="tn-bill-name">
-          <Link to={`/trays/${enc(tray.id)}?item=${item.id}`} title={title}>
-            {title}
-          </Link>
+          <span className="tn-bill-title">
+            <Link to={`/trays/${enc(tray.id)}?item=${item.id}`} title={title}>
+              {title}
+            </Link>
+            <ItemStar files={item.files} />
+          </span>
           {payee && (
             <span className="tn-sub" title={visible(payee)}>
               {visible(payee)}

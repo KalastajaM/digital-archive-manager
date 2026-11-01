@@ -3389,8 +3389,9 @@ a.tn-start:hover { background: var(--accent-hover); }
 .tn-table .tn-num,
 .tn-bill-amount { text-align: right; }
 .tn-bill-name { width: 100%; max-width: 0; }
-.tn-bill-name > a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); text-decoration: none; }
-.tn-bill-name > a:hover { text-decoration: underline; }
+.tn-bill-title { display: flex; align-items: center; }
+.tn-bill-title > a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); text-decoration: none; }
+.tn-bill-title > a:hover { text-decoration: underline; }
 .tn-bill-name .tn-sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--muted); }
 .tn-bill-name .badges { margin: 2px 0 0; }
 .tn-bill-due,
@@ -3421,6 +3422,9 @@ a.tn-start:hover { background: var(--accent-hover); }
 .tn-rows .today-row-main { min-width: 0; }
 .tn-rows .today-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tn-rows .today-more { padding: 8px 0; }
+/* a tray row's title ellipsizes beside its star */
+.tray-row-title { display: flex; align-items: center; }
+.tray-row-title > a { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Starred's rows: a list; the name ellipsizes beside its marks, the buttons on hover keep the row's height */
 ul.starred-list { list-style: none; margin: 0; }
 .starred-list .today-row { align-items: center; }

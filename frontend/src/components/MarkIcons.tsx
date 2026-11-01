@@ -3,6 +3,7 @@
 import { Lock, LockOpen, Star } from "lucide-react";
 import { createContext, useContext } from "react";
 import { isUnlockedNow, type Mark, useIsBlocked, useLocks } from "../api/client";
+import { useStarredOf } from "./useStarredFiles";
 
 export const MARK_LABEL: Record<Mark, string> = { starred: "Starred", important: "Important" };
 /** A built-in collection as the UI names it: "★ Starred" (stored as "Ongoing", its
@@ -86,4 +87,11 @@ export function MarkIcons({
       {lock}
     </span>
   );
+}
+
+/** A tray item's ★ on Today, whose rows have the item's file IDs but not their marks: shown
+ * when any of its files is starred. */
+export function ItemStar({ files }: { files: readonly string[] }) {
+  const starredOf = useStarredOf();
+  return starredOf(files).length > 0 ? <MarkIcons marks={["starred"]} /> : null;
 }
