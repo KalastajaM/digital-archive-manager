@@ -18,6 +18,9 @@ export const visibleText = (text: string) =>
     c === "\n" || c === "\t" ? c : `⟨U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}⟩`,
   );
 
+/** ``text`` without the ⟨U+XXXX⟩ marks that ``visible`` shows for hidden characters. */
+export const withoutMarks = (text: string) => text.replace(/⟨U\+[0-9A-F]{4,6}⟩/g, "");
+
 /** A token worth showing: OCR noise such as "•ö" has fewer than two letters or digits.
  * The noise stays in the stored text; it is only left out of what a box lists. */
 export const isWordToken = (token: string) => (token.match(/[\p{L}\p{N}]/gu) ?? []).length >= 2;
