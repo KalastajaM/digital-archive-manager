@@ -859,7 +859,7 @@ describe("Picture areas", () => {
   });
 });
 
-describe("Diagnosing a picture rule on a document", () => {
+describe("A picture rule on a document", () => {
   const PICTURE_RULE = {
     ...RULE,
     id: "kela",
@@ -870,48 +870,14 @@ describe("Diagnosing a picture rule on a document", () => {
     rule_id: "kela", index: 0, box: [0.05, 0.03, 0.35, 0.1], kind: "image", lines: [], score: null,
     matched: false, reason: null, wins: false, ...over,
   });
-  // ``picture_miss``: only the picture held the rule back (a near miss, drawn for diagnosis)
-  const explain = (areas: object[], picture_miss = true) => [{ rule_id: "kela", matched: false, why: "x", wins: [], zone_lines: [[]], areas, picture_miss }];
 
-  it("shows where a picture rule that did not match fits best on this page, with its score", async () => {
-    setup({
-      "GET /api/rules": { body: RULES },
-      "POST /api/rules/explain": {
-        body: explain([area({ score: 0.71, lines: [[0.06, 0.04, 0.3, 0.09]], reason: "picture 0.71, needs 0.85" })]),
-      },
-    });
-    const shown = await screen.findByTestId("area-line");
-    expect(shown).toBeInTheDocument();
-    const drawn = document.querySelector('[data-area="kela:0"]') as HTMLElement;
-    expect(drawn).toHaveAttribute("data-matched", "false");
-    expect(drawn).toHaveAttribute("title", "kela: picture 0.71, needs 0.85");
-  });
-
-  it("says why a score could not be worked out", async () => {
-    setup({
-      "GET /api/rules": { body: RULES },
-      "POST /api/rules/explain": { body: explain([area({ reason: "the picture of page 1 is not made yet" })]) },
-    });
-    await waitFor(() => expect(document.querySelector('[data-area="kela:0"]')).not.toBeNull());
-    expect(document.querySelector('[data-area="kela:0"]')).toHaveAttribute("title", "kela: the picture of page 1 is not made yet");
-  });
-
-  it("draws nothing for a picture rule whose words do not fit this document", async () => {
-    // a new picture rule's areas showed on every other document of the Inbox
-    const { calls } = setup({
-      "GET /api/rules": { body: RULES },
-      "POST /api/rules/explain": { body: explain([area({ reason: "no word found in area 1" })], false) },
-    });
-    await waitFor(() => expect(posts(calls, "/api/rules/explain")).toHaveLength(1));
-    await screen.findByRole("button", { name: "Draw a box" });
-    expect(document.querySelector('[data-area="kela:0"]')).toBeNull();
-  });
-
-  it("asks for nothing when no rule has a picture area", async () => {
-    const { calls } = setup();
+  it("draws nothing for a picture rule that did not match, and does not ask why", async () => {
+    // a picture-only rule's areas showed on every document of the Inbox
+    const { calls } = setup({ "GET /api/rules": { body: RULES } });
     await screen.findByRole("button", { name: "Draw a box" });
     await waitFor(() => expect(calls.some((c) => c.url === "/api/rules")).toBe(true));
     expect(posts(calls, "/api/rules/explain")).toHaveLength(0);
+    expect(document.querySelector('[data-area="kela:0"]')).toBeNull();
   });
 
   it("draws the rule being tested instead, from the areas the API gives for this document", async () => {
