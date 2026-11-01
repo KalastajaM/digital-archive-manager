@@ -12,7 +12,7 @@ from dam import packs
 from dam.core.paths import nfc
 from dam.core.text import fold
 from dam.db.tables import collection_members, collections, file_assignments, files, tags
-from dam.query import Filter, date_span, extensions_of, parse_query
+from dam.query import Filter, ParsedQuery, Term, date_span, extensions_of, parse_query
 
 
 @dataclass
@@ -35,37 +35,54 @@ _CONTROLS = re.compile(r"[\s\x00-\x1f\x7f-\x9f]+")
 _INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff\ufdd0-\ufdef\ufffe\uffff]")
 
 
-def _fts_query(query: str) -> str:
-    """Quote every whitespace token (FTS5 syntax chars become literals); prefix-match the last."""
-    cleaned = "".join(" " if ord(c) < 32 or ord(c) == 127 else c for c in nfc(query))
+def _fts_term(term: Term) -> str:
+    """One word or phrase as an FTS5 string (its syntax characters become literals)."""
+    cleaned = "".join(" " if ord(c) < 32 or ord(c) == 127 else c for c in nfc(term.text))
     words = [w for w in cleaned.split() if any(c.isalnum() for c in w)]
-    tokens = ['"' + w.replace('"', '""') + '"' for w in words]
-    if not tokens:
+    if not words:
         return ""
-    tokens[-1] += "*"
-    return " ".join(tokens)
+    quoted = '"' + " ".join(words).replace('"', '""') + '"'
+    return quoted + "*" if term.prefix else quoted
+
+
+def _fts_any(terms: list[Term]) -> str:
+    """The terms joined by OR (bracketed when there are several); "" when none can match."""
+    strings = [s for s in map(_fts_term, terms) if s]
+    return strings[0] if len(strings) == 1 else f"({' OR '.join(strings)})" if strings else ""
+
+
+def _fts_query(parsed: ParsedQuery) -> str:
+    """The FTS5 expression every wanted clause must match."""
+    return " AND ".join(c for c in map(_fts_any, parsed.clauses) if c)
 
 
 def _like_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _tag_ids(
-    engine: Engine, names: list[str], skip_unknown: bool = False
-) -> list[list[int]] | None:
-    """For each wanted tag the ids of the tags with that name (case and accents ignored);
-    None when one of them does not exist, so nothing can match (or, with
-    ``skip_unknown``, when none of them exists)."""
+def _tag_ids(engine: Engine, names: list[str]) -> list[int]:
+    """The ids of the tags with these names (case and accents ignored); unknown names
+    add none."""
     with engine.connect() as conn:
         known = [(r.id, fold(r.name)) for r in conn.execute(select(tags.c.id, tags.c.name))]
+    want = {fold(n.strip()) for n in names if n.strip()}
+    return [i for i, folded in known if folded in want]
+
+
+def _tag_groups(
+    engine: Engine, groups: list[tuple[str, ...]], any_mode: bool
+) -> list[list[int]] | None:
+    """For each wanted ``tag:`` (``tag:a,b`` is one, either tag) the ids of its tags. A
+    tag that does not exist is left out of its group; a group with none left means no
+    hits, unless ``any_mode`` (then it is dropped, and None only when every one is)."""
     found: list[list[int]] = []
-    for name in dict.fromkeys(n.strip() for n in names if n.strip()):
-        ids = [i for i, folded in known if folded == fold(name)]
+    for group in groups:
+        ids = _tag_ids(engine, list(group))
         if ids:
             found.append(ids)
-        elif not skip_unknown:
+        elif not any_mode:
             return None
-    return found if found or not skip_unknown else None
+    return found or None
 
 
 @dataclass
@@ -239,45 +256,47 @@ def _own_collection_ids(engine: Engine) -> list[int]:
 
 
 def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> None:
-    neg = f.negated
-    v = f.value
-    if v == ANY and f.name in _HAS_ANY:
-        w.add(_HAS_ANY[f.name], neg)
-        return
-    if v == ANY and f.name == "collection":
-        w.add(_member_cond(engine, w, _own_collection_ids(engine)), neg)
-        return
-    if f.name == "name":
+    """The filter's condition; with several values (``type:pdf,docx``) any of them."""
+    sql = [_filter_sql(engine, w, f.name, v, ctx) for v in f.values]
+    w.add(sql[0] if len(sql) == 1 else " OR ".join(f"({x})" for x in sql), f.negated)
+
+
+def _filter_sql(engine: Engine, w: _Where, name: str, v: str, ctx: SearchContext) -> str:
+    """SQL for one value of a filter (``tag`` is handled with the tag mode by the caller)."""
+    if v == ANY and name in _HAS_ANY:
+        return _HAS_ANY[name]
+    if v == ANY and name == "collection":
+        return _member_cond(engine, w, _own_collection_ids(engine))
+    if name == "name":
         if not any(c in v for c in "*?"):
             v = f"*{v}*"  # no wildcard: the text anywhere in the name
         forms = list(dict.fromkeys([nfc(v), unicodedata.normalize("NFD", v)]))
-        w.add(" OR ".join(f"f.name LIKE {w.bind(_wildcards(x))} ESCAPE '\\'" for x in forms), neg)
-    elif f.name == "in":
-        w.add(_under_any(w, [v]), neg)
-    elif f.name == "collection":
-        w.add(_member_cond(engine, w, _collection_ids(engine, v)), neg)
-    elif f.name in ("from", "for"):
-        column = "sender" if f.name == "from" else "person"
+        return " OR ".join(f"f.name LIKE {w.bind(_wildcards(x))} ESCAPE '\\'" for x in forms)
+    elif name == "in":
+        return _under_any(w, [v])
+    elif name == "collection":
+        return _member_cond(engine, w, _collection_ids(engine, v))
+    elif name in ("from", "for"):
+        column = "sender" if name == "from" else "person"
         names = _assigned(engine, column, v)
-        w.add(
+        return (
             f"f.drive_id IN (SELECT drive_id FROM file_assignments WHERE {column} IN "
             f"({w.marks(names)}))"
             if names
-            else "0",
-            neg,
+            else "0"
         )
-    elif f.name in ("id", "iban", "domain"):
+    elif name in ("id", "iban", "domain"):
         # identifiers of the enabled packs, the current content's only. id:* is any business
         # ID (not IBANs or domains), iban:* any IBAN, domain:* any web or mail domain; a
         # value is compared without spaces, dashes or case, id: over every kind
         groups = packs.identifier_kinds(packs.active())
         if v == ANY:
-            kinds, match = groups[f.name], ""
-            own = sorted(packs.active().own_ids) if f.name == "id" else []
+            kinds, match = groups[name], ""
+            own = sorted(packs.active().own_ids) if name == "id" else []
             if own:  # the owner's own business ID is on everything they sent: not "any"
                 match = f" AND i.value NOT IN ({w.marks(own)})"
         else:
-            kinds = [k for ks in groups.values() for k in ks] if f.name == "id" else groups[f.name]
+            kinds = [k for ks in groups.values() for k in ks] if name == "id" else groups[name]
             pairs = _id_pairs(v, kinds)
             # what a finder read: an exact lookup by kind and value; kinds found only next
             # to their label (a KvK number) cannot read a bare value: compared without
@@ -294,24 +313,23 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
                     f"IN ({w.marks(_id_keys(v))}))"
                 )
             match = " AND (" + " OR ".join(exact) + ")" if exact else " AND 0"
-        w.add(
+        return (
             "f.drive_id IN (SELECT i.drive_id FROM file_identifiers i JOIN files x "
             "ON x.drive_id = i.drive_id AND x.sha256 = i.sha256 "
             f"WHERE i.kind IN ({w.marks(kinds)}){match})"
             if kinds
-            else "0",
-            neg,
+            else "0"
         )
-    elif f.name == "type":
-        w.add(f"COALESCE(f.ext, '') IN ({w.marks(list(extensions_of(v)))})", neg)
-    elif f.name in ("date", "before", "after"):
+    elif name == "type":
+        return f"COALESCE(f.ext, '') IN ({w.marks(list(extensions_of(v)))})"
+    elif name in ("date", "before", "after"):
         first, after = date_span(v)
         # date: the whole period; after: from its first day on; before: up to its first day
         lo, hi = (
             (first, after)
-            if f.name == "date"
+            if name == "date"
             else (first, None)
-            if f.name == "after"
+            if name == "after"
             else (None, first)
         )
         # the document date; a file without one is dated by the modified time Browse shows
@@ -322,49 +340,44 @@ def _add_filter(engine: Engine, w: _Where, f: Filter, ctx: SearchContext) -> Non
         if hi is not None:
             day.append(f"f.doc_date < {w.bind(hi.isoformat())}")
             mtime.append(f"f.mtime < {w.bind(_local_epoch(hi))}")
-        w.add(
-            f"({' AND '.join(day)}) OR (f.doc_date IS NULL AND {' AND '.join(mtime)})",
-            neg,
-        )
-    elif f.name == "tray":
+        return f"({' AND '.join(day)}) OR (f.doc_date IS NULL AND {' AND '.join(mtime)})"
+    elif name == "tray":
         marks = w.marks(_trays_matching(ctx, v))
-        w.add(
+        return (
             "f.drive_id IN (SELECT x.drive_id FROM item_files x JOIN items i ON i.id = x.item_id "
-            f"WHERE i.state = 'open' AND i.tray_id IN ({marks}))",
-            neg,
+            f"WHERE i.state = 'open' AND i.tray_id IN ({marks}))"
         )
-    elif f.name == "is":
-        _add_is(engine, w, v, neg, ctx)
-    # ``tag`` is handled with the tag mode by the caller
+    elif name == "is":
+        return _is_sql(engine, w, v, ctx)
+    return "0"
 
 
-def _add_is(engine: Engine, w: _Where, value: str, neg: bool, ctx: SearchContext) -> None:
+def _is_sql(engine: Engine, w: _Where, value: str, ctx: SearchContext) -> str:
     if value == "starred":
-        w.add(_member_cond(engine, w, _builtin_id(engine, "starred")), neg)
+        return _member_cond(engine, w, _builtin_id(engine, "starred"))
     elif value == "important":
-        w.add(_member_cond(engine, w, _builtin_id(engine, "important")), neg)
+        return _member_cond(engine, w, _builtin_id(engine, "important"))
     elif value == "locked":
         # the owner's own locks only; Important files are found with is:important
-        w.add("f.drive_id IN (SELECT drive_id FROM file_locks)", neg)
+        return "f.drive_id IN (SELECT drive_id FROM file_locks)"
     elif value == "todo":
-        w.add(
+        return (
             "f.drive_id IN (SELECT target_id FROM checklist_items "
             "WHERE target_kind = 'file' AND done = 0) OR f.drive_id IN ("
             "SELECT x.drive_id FROM item_files x JOIN items i ON i.id = x.item_id "
             "WHERE i.state = 'open' AND CAST(i.id AS TEXT) IN ("
-            "SELECT target_id FROM checklist_items WHERE target_kind = 'item' AND done = 0))",
-            neg,
+            "SELECT target_id FROM checklist_items WHERE target_kind = 'item' AND done = 0))"
         )
     elif value == "note":
-        w.add(
+        return (
             "f.drive_id IN (SELECT target_id FROM notes "
-            "WHERE target_kind = 'file' AND TRIM(text) != '')",
-            neg,
+            "WHERE target_kind = 'file' AND TRIM(text) != '')"
         )
     elif value == "summary":
-        w.add("f.drive_id IN (SELECT drive_id FROM file_summaries WHERE TRIM(summary) != '')", neg)
+        return "f.drive_id IN (SELECT drive_id FROM file_summaries WHERE TRIM(summary) != '')"
     elif value == "disconnected":
-        w.add(_under_any(w, list(ctx.disconnected)), neg)  # none: "0", nothing found
+        return _under_any(w, list(ctx.disconnected))  # none: "0", nothing found
+    return "0"
 
 
 def search(
@@ -379,7 +392,8 @@ def search(
     """Best matches first. Skips missing and parked files; ``folder`` limits to a subtree.
 
     ``query`` is plain words and ``name:value`` filters (``dam.query``). Every filter must
-    hold; a ``-`` filter excludes. ``tag_names`` are more ``tag:`` filters: files with every
+    hold; a ``-`` filter excludes, as does a ``-`` word; a filter's comma list wants any of
+    its values. ``tag_names`` are more ``tag:`` filters: files with every
     one of the tags (``tag_mode`` "all") or at least one ("any", for the positive tags;
     a tag that does not exist is then simply left out, all unknown: no hits). Tags are
     looked up in the ``file_tags`` index, so the number of files does not matter. With no
@@ -387,16 +401,17 @@ def search(
     cannot be right."""
     ctx = ctx or SearchContext()
     parsed = parse_query(query)
-    match = _fts_query(parsed.words)
+    match = _fts_query(parsed)
+    exclude = _fts_any(parsed.excluded)
     any_mode = tag_mode == "any"
     # tag:* (any tag) is a filter like the others, not a tag name
     named = [f for f in parsed.filters if f.name == "tag" and f.value != ANY]
-    positive = [f.value for f in named if not f.negated]
-    positive += list(tag_names or [])
-    negative = [f.value for f in named if f.negated]
+    positive = [f.values for f in named if not f.negated]
+    positive += [(name,) for name in tag_names or []]
+    negative = [v for f in named if f.negated for v in f.values]
     others = [f for f in parsed.filters if f.name != "tag" or f.value == ANY]
-    wanted = _tag_ids(engine, positive, skip_unknown=any_mode) if positive else []
-    if wanted is None or (not match and not wanted and not negative and not others):
+    wanted = _tag_groups(engine, positive, any_mode) if positive else []
+    if wanted is None or not (match or exclude or wanted or negative or others):
         return []
     w = _Where()
     params: dict = {"limit": limit, "open": _OPEN, "close": _CLOSE}
@@ -426,14 +441,16 @@ def search(
                 f"f.drive_id IN (SELECT drive_id FROM file_tags WHERE tag_id IN ({w.marks(ids)}))"
             )
     if negative:
-        known = _tag_ids(engine, negative, skip_unknown=True)
-        every = [tag_id for ids in known or [] for tag_id in ids]
+        every = _tag_ids(engine, negative)
         if every:
             marks = w.marks(every)
             w.add(
                 f"f.drive_id IN (SELECT drive_id FROM file_tags WHERE tag_id IN ({marks}))",
                 negated=True,
             )
+    if exclude:
+        marks = w.bind(exclude)
+        w.add(f"f.drive_id IN (SELECT drive_id FROM file_fts WHERE file_fts MATCH {marks})", True)
     for f in others:
         _add_filter(engine, w, f, ctx)
     base = nfc(folder).strip("/") if folder else ""

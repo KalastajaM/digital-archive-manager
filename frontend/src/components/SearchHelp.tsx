@@ -9,7 +9,9 @@ import { Popover } from "./ui/Popover";
 const TIPS = [
   'Put a value with spaces in quotes: in:"50. Medical".',
   "In name: use * for any text and ? for one character.",
-  "A - in front leaves out what matches: -tag:paid.",
+  "A - in front leaves out what matches: -tag:paid, -draft (NOT draft also works).",
+  "A comma lists choices, any of which may match: type:pdf,docx.",
+  'Words: "annual report" for the exact phrase, vakuut* for words that start so, kela OR kelan for either.',
   "Filters combine, and with plain words: kela type:pdf after:2025.",
 ];
 

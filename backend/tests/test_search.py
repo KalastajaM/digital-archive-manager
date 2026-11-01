@@ -136,3 +136,41 @@ def test_snippet_drops_noncharacters_inside_words(engine):
     add(repo, "d1", "a/p.pdf", "urheilulisenssiva\ufffekuutuksessa ja va\u00adkuutus\u200b ehdot")
     hit = search(engine, "ehdot")[0]
     assert "urheilulisenssivakuutuksessa ja vakuutus [ehdot]" in hit.snippet
+
+
+def _three(engine):
+    repo = FileRepo(engine, inbox="##. Organize")
+    add(repo, "d1", "a/one.pdf", "Kela decision about the annual report")
+    add(repo, "d2", "a/two.pdf", "Kelan lasku, report annual")
+    add(repo, "d3", "a/three.pdf", "If insurance draft")
+
+
+def found(engine, q):
+    return sorted(h.drive_id for h in search(engine, q))
+
+
+def test_dash_and_not_leave_words_out(engine):
+    _three(engine)
+    assert found(engine, "annual -lasku") == ["d1"]
+    assert found(engine, "annual NOT lasku") == ["d1"]
+    assert found(engine, '-"annual report" pdf') == ["d2", "d3"]  # names count as text
+    assert found(engine, "-draft") == ["d1", "d2"]  # only exclusions: every other file
+
+
+def test_or_wants_either(engine):
+    _three(engine)
+    assert found(engine, "kela OR insurance") == ["d1", "d3"]
+    assert found(engine, "annual kela OR kelan") == ["d1", "d2"]
+    assert found(engine, "kela AND decision") == ["d1"]
+
+
+def test_a_phrase_wants_the_words_in_order(engine):
+    _three(engine)
+    assert found(engine, '"annual report"') == ["d1"]
+    assert found(engine, "annual report") == ["d1", "d2"]
+
+
+def test_a_star_is_a_prefix_anywhere(engine):
+    _three(engine)
+    assert found(engine, "kela* annual") == ["d1", "d2"]
+    assert found(engine, "kela annual") == ["d1"]
