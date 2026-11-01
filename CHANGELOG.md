@@ -102,6 +102,9 @@ All notable changes are listed here. The format follows
 
 ### Changed
 
+- **Today, Inbox and Browse stay in view.** The sidebar scrolls only the sections under
+  them (Trays, Collections, tags and Archive), so the three main pages, and the Inbox as a
+  drop target, are always one click away.
 - **Fewer snapshots.** Deleting or merging a collection that holds no files, notes,
   checklists or summaries no longer takes a snapshot (the sheet says so), and dam keeps
   only the newest five of the snapshots it takes by itself before a change. Snapshots you

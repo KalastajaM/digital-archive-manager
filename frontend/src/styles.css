@@ -2491,10 +2491,12 @@ kbd {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-right: 1px solid var(--hairline);
-  overflow: hidden; /* the archive block, the search field and the foot stay; the list scrolls */
+  overflow: hidden; /* the archive block, the search field, Today, Inbox, Browse and the foot stay; the sections scroll */
 }
 .sidebar > * { flex: none; }
-.sidebar > .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.sidebar > .sidebar-nav { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.sidebar-pinned { flex: none; padding-bottom: var(--sp-1); border-bottom: 0.5px solid var(--hairline); }
+.sidebar-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .sidebar-brand { padding: 0; margin-bottom: 14px; }
 /* The archive block: a coloured tile with its initial, the name, and under it where the
  * folder lives and how many files it holds; the switch chevrons at the end. */
