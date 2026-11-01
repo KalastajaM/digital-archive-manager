@@ -225,8 +225,8 @@ trays, Today's tray lists and Starred, a collection's files and groups, and Rela
 right-click menu with their actions. An entry that cannot run now is greyed, with the
 reason under it. With the keyboard, **⇧F10** (or the menu key) opens the menu of the row
 that has the focus. The browser's own right-click menu is off everywhere else, except in
-text fields, where copy, paste and spelling still work, and in a file's text (**Show
-text**), for Copy. The PDF preview keeps its viewer's own menu.
+text fields, where copy, paste and spelling still work. The PDF preview keeps its
+viewer's own menu.
 
 Banners above the screen tell you when the archive folder is not available (a cloud drive
 not running, for instance), when an interrupted operation needs settling, or when a tray
@@ -1762,6 +1762,10 @@ different order. Select some text and **Search for selection** (the magnifier) o
 with it as a phrase search of whole words (a word you cut short counts whole), up to about
 200 characters; a text file has this button too.
 The viewer window has no Browse, so there you copy the text instead.
+
+Right-click the text for **Copy**, **Search for selection**, **Select all** and **Show page**
+(back to the page). **⌘A** selects this text once you have clicked in it, not the files in
+the list. What you copy leaves out the marks shown for hidden characters.
 
 ## Activity and undo
 

@@ -619,6 +619,101 @@ describe("FilePreview text view", () => {
     expect(screen.getByRole("button", { name: "Search for selection" })).toBeDisabled();
   });
 
+  describe("its right-click menu", () => {
+    const MARKED = { body: { text: "osa\u200Bmaksu kaksi", truncated: false, ocr_used: false } };
+    const opened = async (ui: React.ReactElement, select_ = false) => {
+      inRouter(ui);
+      showText();
+      const text = await screen.findByTestId("text-preview");
+      if (select_) select(text);
+      return { text, shown: fireEvent.contextMenu(text) };
+    };
+    const items = () => screen.getAllByRole("menuitem").map((i) => i.textContent);
+
+    it("replaces the browser's menu, with Copy and Search greyed without a selection", async () => {
+      mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+      const { shown } = await opened(<FilePreview file={pdf} />);
+      expect(shown).toBe(false); // the browser's own menu stays off
+      expect(screen.getByRole("menuitem", { name: /^Copy/ })).toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: /^Search for selection/ })).toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: "Select all" })).toBeEnabled();
+      expect(screen.getByRole("menuitem", { name: "Show page" })).toBeEnabled();
+    });
+
+    it("Copy leaves out the marks of hidden characters", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      mockFetch({ "GET /api/files/d1/indexed-text": MARKED });
+      const { text } = await opened(<FilePreview file={pdf} />, true);
+      expect(text.textContent).toBe("osa⟨U+200B⟩maksu kaksi");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy" }));
+      expect(writeText).toHaveBeenCalledWith("osamaksu kaksi");
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+
+    it("says so when the clipboard refuses", async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error("no"));
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+      await opened(<FilePreview file={pdf} />, true);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy" }));
+      expect(await screen.findByText(/Could not copy the text/)).toBeInTheDocument();
+    });
+
+    it("Search for selection opens Browse with the phrase", async () => {
+      mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+      const before = vi.fn();
+      await opened(<FilePreview file={pdf} beforeGoToTarget={before} />, true);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Search for selection" }));
+      expect(before).toHaveBeenCalledOnce();
+      expect(new URLSearchParams(screen.getByTestId("where").textContent!.split("?")[1]).get("q")).toBe('"Kela päätös rivi kaksi"');
+    });
+
+    it("Select all selects this text; Show page goes back to the page", async () => {
+      mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+      const { text } = await opened(<FilePreview file={pdf} />);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Select all" }));
+      expect(document.getSelection()!.getRangeAt(0).toString()).toBe(text.textContent);
+      fireEvent.contextMenu(text);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Show page" }));
+      expect(screen.queryByTestId("text-preview")).toBeNull();
+      expect(page()).toBeInTheDocument();
+    });
+
+    it("a text file has no page to go back to, and no search where there is no Browse", async () => {
+      mockFetch({ "GET /api/files/t1/text": { body: { text: "hi", truncated: false } } });
+      inRouter(<FilePreview file={{ drive_id: "t1", path: "a/notes.txt", ext: "txt" }} goToTarget={false} />);
+      fireEvent.contextMenu(await screen.findByTestId("text-preview"));
+      expect(items()).toEqual([expect.stringMatching(/^Copy/), "Select all"]);
+    });
+  });
+
+  it("⌘A selects this text and does not reach the screen's shortcuts", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
+    const screenKeys = vi.fn();
+    document.addEventListener("keydown", screenKeys);
+    inRouter(<FilePreview file={pdf} />);
+    showText();
+    const text = await screen.findByTestId("text-preview");
+    fireEvent.keyDown(text, { key: "a", metaKey: true });
+    expect(document.getSelection()!.getRangeAt(0).toString()).toBe(text.textContent);
+    expect(screenKeys).not.toHaveBeenCalled();
+    fireEvent.keyDown(text, { key: "j" });
+    expect(screenKeys).toHaveBeenCalledOnce(); // other keys still do
+    document.removeEventListener("keydown", screenKeys);
+  });
+
+  it("⌘C copies without the marks of hidden characters", async () => {
+    mockFetch({ "GET /api/files/d1/indexed-text": { body: { text: "osa\u200Bmaksu", truncated: false, ocr_used: false } } });
+    inRouter(<FilePreview file={pdf} />);
+    showText();
+    const text = await screen.findByTestId("text-preview");
+    select(text);
+    const setData = vi.fn();
+    fireEvent.copy(text, { clipboardData: { setData } });
+    expect(setData).toHaveBeenCalledWith("text/plain", "osamaksu");
+  });
+
   it("no search where there is no Browse (the viewer window); the text stays", async () => {
     mockFetch({ "GET /api/files/d1/indexed-text": INDEXED });
     inRouter(<FilePreview file={pdf} goToTarget={false} />);

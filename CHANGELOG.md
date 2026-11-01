@@ -15,8 +15,9 @@ All notable changes are listed here. The format follows
   all seen** have Undo and leave the file alone. New table `content_changes` (migration
   0049) and endpoints under `/api/content-changes`.
 - **Show text** in a file's preview toolbar shows the text read from the file, OCR
-  included, so it can be selected and copied (⌘C or the right-click menu). **Search for
-  selection** finds the files with the selected text as a phrase. New endpoint
+  included, so it can be selected and copied. **Search for selection** finds the files with the
+  selected text as a phrase. Its right-click menu has **Copy**, **Search for selection**,
+  **Select all** and **Show page**. New endpoint
   `GET /api/files/{drive_id}/indexed-text`.
 - **Saved searches.** **Save search…** in Browse's filter row keeps the search under a
   name. They are listed in the sidebar under **Searches** with the number of files each
