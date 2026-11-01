@@ -613,7 +613,7 @@ export function Sidebar({ footer, onSearch }: Props) {
       <ArchiveSwitcher />
       {onSearch && <SidebarSearch onOpen={onSearch} />}
       <nav aria-label="Main" className="sidebar-nav">
-        <ul className="sidebar-list">
+        <ul className="sidebar-list sidebar-pinned">
           <Row to="/" end icon={Sun} label="Today" badge={due} />
           <DropRow
             to="/inbox"
@@ -624,6 +624,9 @@ export function Sidebar({ footer, onSearch }: Props) {
             onDrop={back.drop}
           />
           <Row to="/browse" icon={FolderTree} label="Browse" />
+        </ul>
+        {/* Today, Inbox and Browse stay in view; the sections under them scroll */}
+        <ul className="sidebar-list sidebar-scroll">
           <Section
             title="Trays"
             to="/trays"

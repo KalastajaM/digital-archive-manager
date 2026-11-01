@@ -100,6 +100,20 @@ function drag(ids: string[], label = "a.pdf") {
 
 const nav = () => screen.getByRole("navigation", { name: "Main" });
 
+describe("Sidebar layout", () => {
+  it("Today, Inbox and Browse sit above the list that scrolls, which holds everything else", async () => {
+    setup();
+    const lists = nav().querySelectorAll(":scope > ul");
+    expect(lists).toHaveLength(2);
+    const [pinned, scroll] = lists;
+    expect(scroll).toHaveClass("sidebar-scroll");
+    const names = (ul: Element) => within(ul as HTMLElement).queryAllByRole("link").map((a) => a.textContent);
+    expect(names(pinned)).toEqual(["Today", "Inbox", "Browse"]);
+    await within(scroll as HTMLElement).findByRole("link", { name: "To pay" });
+    expect(within(scroll as HTMLElement).getByRole("link", { name: "Activity" })).toBeInTheDocument();
+  });
+});
+
 describe("Sidebar drops", () => {
   it("dropping on a tray puts the files in it; the toast opens the item or takes it back", async () => {
     const { calls, user } = setup({
