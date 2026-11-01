@@ -121,6 +121,28 @@ describe("Filter completions", () => {
     expect(box()).toHaveValue("");
   });
 
+  it("after a comma the suggestions are for the next value, and taking one keeps the list", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "type:pdf,sh");
+    expect((await options()).map((o) => o.textContent)).toEqual(["sheet"]);
+    await user.keyboard("{Enter}");
+    expect(chips()).toEqual(["type:pdf,sheet×"]);
+    expect(where()).toBe(`/browse?q=${encodeURIComponent("type:pdf,sheet")}`);
+    expect(box()).toHaveValue("");
+  });
+
+  it("Enter after a trailing comma takes the list as it stands", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "type:pdf,{Enter}");
+    expect(chips()).toEqual(["type:pdf×"]);
+  });
+
+  it("Enter on a list that fits no suggestion takes it as typed", async () => {
+    const { user } = setup("/browse");
+    await user.type(box(), "type:pdf,docx{Enter}");
+    expect(chips()).toEqual(["type:pdf,docx×"]);
+  });
+
   it("a - in front makes a negated filter with its own chip", async () => {
     const { user, calls } = setup("/browse");
     await user.type(box(), 'kela -tag:paid -in:"90. Other People" ');

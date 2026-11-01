@@ -1,8 +1,9 @@
 /** What Browse's search box offers while a filter is typed: filter names for a few
  * letters (``col`` -> ``collection:``), and values for the filter being typed (tags,
- * collections, senders, people, trays, folders, file types, ``is:`` words). */
+ * collections, senders, people, trays, folders, file types, ``is:`` words). After a comma
+ * (``type:pdf,do``) the values are for the part after it, and taking one keeps the list. */
 import { useCollections, useFolders, usePeople, useSenders, useTagSuggestions, useTrays } from "../api/client";
-import { FILTER_NAMES, type FilterName, IS_VALUES, type SearchFilter, type SearchText, sameFilter, TYPE_VALUES } from "../searchFilters";
+import { FILTER_NAMES, type FilterName, IS_VALUES, type SearchFilter, type SearchText, sameFilter, TYPE_VALUES, typedList } from "../searchFilters";
 
 export type Completion =
   | { kind: "name"; key: string; label: string; hint?: string; insert: string }
@@ -20,7 +21,8 @@ export function useSearchCompletions(typed: SearchText, active: SearchFilter[], 
   const negatedWord = word.startsWith("-");
   const bare = negatedWord ? word.slice(1) : word;
   const on = (name: FilterName) => open && partial?.name === name;
-  const tagPrefix = partial ? (partial.name === "tag" ? partial.value : "") : bare;
+  const list = partial ? typedList(partial) : null;
+  const tagPrefix = partial ? (partial.name === "tag" ? (list?.last ?? "") : "") : bare;
   const wantTags = open && ((partial?.name === "tag") || (!partial && bare.length >= 2));
   const tags = useTagSuggestions(tagPrefix, 8, wantTags);
   const collections = useCollections("all", on("collection"));
@@ -40,7 +42,8 @@ export function useSearchCompletions(typed: SearchText, active: SearchFilter[], 
   });
 
   if (partial) {
-    const want = fold(partial.value);
+    const { chosen, last } = typedList(partial);
+    const want = fold(last);
     const has = (s: string) => fold(s).includes(want);
     const neg = partial.negated;
     let out: Completion[] = [];
@@ -71,6 +74,14 @@ export function useSearchCompletions(typed: SearchText, active: SearchFilter[], 
         break;
       default:
         break; // name, id, iban, domain, date, before, after: typed in full
+    }
+    if (chosen.length > 0) {
+      // an unquoted list cannot hold a space or a comma, so such a name is not offered in one
+      const listed = chosen.map(fold);
+      out = out.flatMap((c) => {
+        if (c.kind !== "value" || /[\s,"]/.test(c.filter.value) || listed.includes(fold(c.filter.value))) return [];
+        return [{ ...c, filter: { ...c.filter, value: [...chosen, c.filter.value].join(","), anyOf: true } }];
+      });
     }
     return out.filter((c) => c.kind === "value" && !taken(c.filter)).slice(0, MAX);
   }

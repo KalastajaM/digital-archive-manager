@@ -21,6 +21,7 @@ All notable changes are listed here. The format follows
   typed and changes nothing.
 - A filter takes a comma list of values, any of which may match: `type:pdf,docx`,
   `tag:insurance,medical`.
+  After a comma the suggestions are for the next value.
 
 ### Changed
 
