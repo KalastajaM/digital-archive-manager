@@ -8,6 +8,12 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Changed files.** dam tells you when a file's content is no longer what it was: a
+  **Changed files** section on Today (only there while something changed), a line in the
+  file's panel and the search `is:changed`. It compares the content's hash from before
+  and after, so a touched, moved or renamed file gets no notice. **Mark as seen** and **Mark
+  all seen** have Undo and leave the file alone. New table `content_changes` (migration
+  0049) and endpoints under `/api/content-changes`.
 - **Show text** in a file's preview toolbar shows the text read from the file, OCR
   included, so it can be selected and copied. **Search for selection** finds the files with the
   selected text as a phrase. Its right-click menu has **Copy**, **Search for selection**,

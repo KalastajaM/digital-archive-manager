@@ -27,7 +27,7 @@ export type SearchText = {
   partial: PartialFilter | null;
 };
 
-export const IS_VALUES = ["starred", "important", "locked", "todo", "note", "summary", "disconnected"] as const;
+export const IS_VALUES = ["starred", "important", "locked", "todo", "note", "summary", "changed", "disconnected"] as const;
 export const TYPE_VALUES = ["pdf", "image", "doc", "sheet", "slides", "text", "mail", "archive", "audio", "video"] as const;
 
 /** Every filter with an example and a line, for the help popup (and the guide). */
@@ -46,7 +46,7 @@ export const FILTER_HELP: { name: FilterName; example: string; text: string }[] 
   { name: "after", example: "after:2025", text: "Dated on or after the first day of that year, month or day." },
   { name: "before", example: "before:2026-06", text: "Dated before the first day of that year, month or day." },
   { name: "tray", example: "tray:to-pay", text: "Files with an open item in that tray (its id or name). tray:* in any tray." },
-  { name: "is", example: "is:locked", text: "starred, important, locked (a lock you set; Important files are found with is:important), todo (open checklist items), note, summary or disconnected (files in an archive folder that is not connected now)." },
+  { name: "is", example: "is:locked", text: "starred, important, locked (a lock you set; Important files are found with is:important), todo (open checklist items), note, summary, changed (content that changed, not marked seen yet) or disconnected (files in an archive folder that is not connected now)." },
 ];
 
 const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);

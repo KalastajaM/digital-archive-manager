@@ -174,6 +174,9 @@ def file_detail(app: AppDep, drive_id: str) -> dict:
         "link_target_id": target.drive_id if target else None,
         "link_target_path": target_path,
         "link_target_inside": target is not None,
+        "content_change": (
+            asdict(c) if (c := app.repo.content_change(drive_id)) is not None else None
+        ),
     }
     return with_record_marks(app, [detail])[0]
 
