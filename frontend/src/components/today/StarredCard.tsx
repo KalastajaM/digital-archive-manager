@@ -63,34 +63,37 @@ function StarredRow({ m, onLook, onMenu }: { m: Member; onLook?: () => void; onM
   const unstar = useUnstar();
   const name = visible(nameOf(m));
   return (
-    <li onContextMenu={onMenu}>
-      {/* a click opens Browse at the file's folder with the file selected and previewed;
-          Space on it is Quick Look, as before */}
-      {m.path && !m.is_dir && !m.missing ? (
-        <Link
-          className="starred-name"
-          to={browseHref(m.path, m.drive_id)}
-          data-quicklook={onLook ? true : undefined}
-          data-look={m.drive_id}
-          title={`Show ${visible(m.path)} in Browse`}
-        >
-          {name}
+    <li className="today-row" onContextMenu={onMenu}>
+      <div className="today-row-main">
+        <p className="today-row-title">
+          {/* a click opens Browse at the file's folder with the file selected and previewed;
+              Space on it is Quick Look, as before */}
+          {m.path && !m.is_dir && !m.missing ? (
+            <Link
+              className="starred-name"
+              to={browseHref(m.path, m.drive_id)}
+              data-quicklook={onLook ? true : undefined}
+              data-look={m.drive_id}
+              title={`Show ${visible(m.path)} in Browse`}
+            >
+              {name}
+            </Link>
+          ) : (
+            <span
+              className="starred-name"
+              tabIndex={onLook ? 0 : undefined}
+              data-quicklook={onLook ? true : undefined}
+              data-look={m.drive_id}
+              title={m.path ? visible(m.path) : name}
+            >
+              {name}
+            </span>
+          )}
           <MarkIcons marks={m.marks} omit="starred" />
-        </Link>
-      ) : (
-        <span
-          className="starred-name"
-          tabIndex={onLook ? 0 : undefined}
-          data-quicklook={onLook ? true : undefined}
-          data-look={m.drive_id}
-          title={m.path ? visible(m.path) : undefined}
-        >
-          {name}
-          <MarkIcons marks={m.marks} omit="starred" />
-        </span>
-      )}
-      {m.missing && <span className="hint">missing</span>}
-      {!m.missing && m.quarantined && <span className="hint">in ##. To Delete</span>}
+        </p>
+        {m.missing && <p className="today-row-sub">missing</p>}
+        {!m.missing && m.quarantined && <p className="today-row-sub">in ##. To Delete</p>}
+      </div>
       <span className="starred-actions" role="group" aria-label={`Open ${name}`}>
         {onLook && <IconButton icon={<Eye {...ICON} />} label="Quick Look" shortcut="Space" onClick={onLook} />}
         {(usable(m) || (m.is_dir && !m.missing)) && <LaunchButtons launch={launch} only={m.is_dir ? "reveal" : undefined} />}
@@ -216,7 +219,7 @@ export function StarredCard({ frame, Shell = Card }: { frame: CardFrame; Shell?:
           {starred.data && <Link to={collectionHref({ id: starred.data.id, name: starred.data.name, kind: "starred" })}>★ Ongoing</Link>}
         </p>
       ) : (
-        <ul className="today-list starred-list" aria-label="Starred files">
+        <ul className="tn-rows starred-list" aria-label="Starred files">
           {members.map((m) => (
             <StarredRow key={m.drive_id} m={m} onLook={lookAt(m)} onMenu={(e) => menu.open(m, e)} />
           ))}
