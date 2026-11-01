@@ -439,7 +439,7 @@ dialog.palette .palette-field input:focus-visible { flex: 1; min-width: 0; heigh
 .count { color: var(--muted); font-weight: normal; }
 .hint { color: var(--muted); font-size: var(--fs-sm); }
 .error { color: var(--red-text); background: var(--red-bg); padding: 6px 8px; overflow-wrap: anywhere; }
-.notice { color: var(--orange-text); background: var(--orange-bg); padding: 6px 8px; }
+.notice { color: var(--orange-text); background: var(--orange-bg); padding: 6px 8px; overflow-wrap: anywhere; }
 .actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin: var(--sp-3) 0; }
 .ongoing-preview-reason { margin: 0 auto 0 0; align-self: center; }
 .field { margin-bottom: var(--sp-3); }
@@ -2168,6 +2168,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .tag-bar .search-tags { flex: 0 1 auto; }
 .tag-add { background: transparent; box-shadow: none; min-height: 0; border-radius: 999px; font-size: var(--fs-sm); cursor: pointer; }
 .tag-add-field { position: relative; }
+.tag-bar-save { margin-left: auto; }
+.save-search-query { margin: var(--sp-2) 0 0; overflow-wrap: anywhere; }
 .tag-add-field input { font-size: var(--fs-sm); padding: 1px var(--sp-2); width: 11rem; }
 .tag-add-field .tag-suggest { right: auto; min-width: 14rem; }
 .tag-mode .segmented-option { padding: 1px var(--sp-2); }
@@ -2191,6 +2193,8 @@ main:has(> .settings) { padding: 0; min-height: 0; display: flex; }
 .search-help-example { justify-self: start; border: none; background: var(--accent-soft); color: var(--text); font-family: var(--font-mono, monospace); font-size: var(--fs-xs); padding: 1px var(--sp-2); min-height: 0; border-radius: var(--r-sm); box-shadow: none; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
 .search-help-list .search-help-example { white-space: normal; } /* a long example wraps in its column; buttons do not */
 .search-help-example:hover { background: var(--hover); }
+.search-help-pop h4 { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--text-2); }
+.search-help-saved li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-help-tips li { color: var(--muted); padding: 1px 0; }
 
 /* Maintenance screen */

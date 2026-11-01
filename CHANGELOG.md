@@ -8,6 +8,13 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **Saved searches.** **Save search…** in Browse's filter row keeps the search under a
+  name. They are listed in the sidebar under **Searches** with the number of files each
+  finds now (up to 500+); a click opens Browse with the search, and the row's tooltip
+  shows the query. Saving again under the same name asks to replace it; Rename… and
+  Delete (with Undo) are in the row's right-click menu. The **?** search help lists them
+  as your own examples, and the palette (⌘K) finds them by name. New endpoints under
+  `/api/saved-searches` and the table `saved_searches` (migration 0048).
 - Search takes `-word` and `NOT word` to leave out files with a word, `kela OR kelan`
   for either word, `"two words"` for a phrase and `word*` for a prefix. `AND` may be
   typed and changes nothing.

@@ -1959,6 +1959,22 @@ the command line: `dam errors [--all] [--retry]`.
   - Groups (one level, a tag is in at most one, never written on files):
     `POST /api/tags/groups` `{name}`, `/groups/{id}/rename`, `/groups/{id}/delete` (its tags
     are ungrouped; the answer lists them) and `/groups/restore` `{name, members}` for Undo.
+- **Saved searches** (table `saved_searches` in `dam.sqlite`, migration 0048; nothing
+  journaled): a name and the query as Browse's address keeps it (`query` is `?q=`,
+  `tag_mode` is `all` or `any`). `name_fold` (NFC, casefolded) is unique, so two names that
+  differ only in case cannot both exist.
+  - `GET /api/saved-searches` lists them by name (case ignored, numbers in order):
+    `[{"id", "name", "query", "tag_mode", "count", "more", "error"}]`. `count` is the number
+    of matches of the same search Browse runs (`/api/search` with that `q` and `tag_mode`),
+    at most 500, with `more` true past that. A query that is refused now (a bad date) has
+    `count: null` and the reason in `error`.
+  - `POST /api/saved-searches` `{name, query, tag_mode, replace}` saves one. A name in use
+    is 409 unless `replace` is true; then that search takes the new query, mode and
+    spelling of the name and keeps its id. An empty name or query, a name over 200 or a
+    query over 2000 characters is 422.
+  - `PATCH /api/saved-searches/{id}` `{name}` renames (409 when another has the name, 404
+    when it is gone); `DELETE /api/saved-searches/{id}` deletes (404 when gone). Files are
+    never touched. Undo of a delete in the sidebar saves it again (a new id).
 - `GET /api/files/{drive_id}/thumb.png?width=300..2000` (default 1200) is a Quick Look
   thumbnail of any file type, rendered at the step at or above the width (600, 1200 or
   2000 px): `qlmanage -t -s <step> -o <dir> <file>` with a 20 s timeout, at most two at

@@ -201,10 +201,12 @@ describe("The tags row", () => {
     expect(within(screen.getByRole("combobox", { name: "Search" }).closest(".search") as HTMLElement).queryByText("medical")).toBeNull();
   });
 
-  it("there is no row without tags", async () => {
+  it("a search of words alone has a row without chips, for + Tag and Save search", async () => {
     setup("/browse?q=pdf");
     await screen.findByRole("list", { name: "Search results" });
-    expect(document.querySelector(".tag-bar")).toBeNull();
+    const row = document.querySelector(".tag-bar") as HTMLElement;
+    expect(within(row).queryByRole("list", { name: "Search filters" })).toBeNull();
+    expect(within(row).getByRole("button", { name: "Save search…" })).toBeInTheDocument();
   });
 
   it("a chip's x removes the tag; the last one removes the row", async () => {

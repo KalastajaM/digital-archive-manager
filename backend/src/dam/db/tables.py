@@ -679,3 +679,18 @@ identifier_names = Table(
     Column("set_by", Text, nullable=False),
     Column("set_at", Float, nullable=False),
 )
+
+# The owner's saved searches (0048): a name and the query as Browse's address keeps it
+# (``q``, and ``tag_mode`` "all" or "any"). ``name_fold`` (NFC, casefolded) keeps "Bills"
+# and "bills" from coexisting.
+saved_searches = Table(
+    "saved_searches",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("name_fold", Text, nullable=False, unique=True),
+    Column("query", Text, nullable=False),
+    Column("tag_mode", Text, nullable=False, server_default="all"),
+    Column("created_at", Float, nullable=False),
+    Column("updated_at", Float, nullable=False),
+)

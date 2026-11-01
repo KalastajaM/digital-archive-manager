@@ -182,20 +182,23 @@ function AddTag({ tags, onAdd }: { tags: string[]; onAdd: (name: string) => void
   );
 }
 
-/** The row under a results pane's toolbar while anything filters: each filter as a
- * removable chip, + Tag, and (with two or more tags) the All / Any switch. */
+/** The row under a results pane's toolbar while a search runs: each filter as a
+ * removable chip, + Tag, (with two or more tags) the All / Any switch, and, with
+ * ``onSave``, Save search… at the end. */
 export function FilterBar({
   filters,
   mode,
   onMode,
   onRemove,
   onAdd,
+  onSave,
 }: {
   filters: SearchFilter[];
   mode: TagMode;
   onMode: (mode: TagMode) => void;
   onRemove: (filter: SearchFilter) => void;
   onAdd: (name: string) => void;
+  onSave?: () => void;
 }) {
   const tags = positiveTags(filters).map((f) => f.value);
   return (
@@ -213,6 +216,11 @@ export function FilterBar({
             { value: "any", label: "Any", title: "A file needs at least one of the tags" },
           ]}
         />
+      )}
+      {onSave && (
+        <button type="button" className="tag-add tag-bar-save" onClick={onSave} title="Save this search to the sidebar's Searches">
+          Save search…
+        </button>
       )}
     </div>
   );

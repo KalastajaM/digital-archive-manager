@@ -1330,6 +1330,51 @@ export const useAllTags = (query = "") =>
 export const useSidebarTags = () =>
   useQuery({ queryKey: ["tags", "sidebar"], queryFn: () => apiGet("/api/tags/sidebar") });
 
+// -- saved searches --------------------------------------------------------------
+
+export type SavedSearch = Schemas["SavedSearchRowOut"];
+export type SavedSearchIn = { name: string; query: string; tag_mode: "all" | "any"; replace?: boolean };
+
+/** Under Browse's key: whatever reloads Browse (a file filed, moved, tagged) reloads the
+ * counts too, and so do the events that make search results stale. An object, not a
+ * string, so no folder's listing (``[...keys.browse, path]``) can share it. */
+const savedSearchesKey = [...keys.browse, { savedSearches: true }] as const;
+
+/** The saved searches by name, each with its number of matches now. */
+export const useSavedSearches = () => {
+  const client = useQueryClient();
+  useEffect(() => {
+    const stale = () => void client.invalidateQueries({ queryKey: savedSearchesKey });
+    window.addEventListener(MARKS_CHANGED, stale);
+    window.addEventListener(SEARCH_STALE, stale);
+    return () => {
+      window.removeEventListener(MARKS_CHANGED, stale);
+      window.removeEventListener(SEARCH_STALE, stale);
+    };
+  }, [client]);
+  return useQuery({ queryKey: savedSearchesKey, queryFn: () => apiGet("/api/saved-searches") });
+};
+
+/** Save (``replace``: over the one with that name), rename and delete saved searches. A
+ * name in use is an ``ApiError`` with status 409. */
+export const useSavedSearchActions = () => {
+  const client = useQueryClient();
+  const settle = () => void client.invalidateQueries({ queryKey: savedSearchesKey });
+  const run = async <T,>(call: () => Promise<T>) => {
+    try {
+      return await call();
+    } finally {
+      settle();
+    }
+  };
+  return {
+    save: (body: SavedSearchIn) => run(() => apiPost("/api/saved-searches", { body })),
+    rename: (id: number, name: string) =>
+      run(() => apiPatch("/api/saved-searches/{search_id}", { path: { search_id: id }, body: { name } })),
+    remove: (id: number) => run(() => apiDelete("/api/saved-searches/{search_id}", { path: { search_id: id } })),
+  };
+};
+
 /** The calls that change tags; each tag change answers how to undo it. */
 export const useTagActions = () => {
   const client = useQueryClient();
