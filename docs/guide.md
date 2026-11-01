@@ -255,8 +255,10 @@ to what it counts; then two columns.
 
 Each tray row has a round checkbox that marks the item done at once (a bill is marked
 paid today), with a toast to undo it; only a done field that needs a value you must give
-opens a small form. Right-click a tray row, or a bill in the **To pay** table, for the tray
-item's menu (see [Working on an item](#working-on-an-item)); right-click a **Starred** file
+opens a small form. A row shows ★ when one of the item's files is starred; the file stays in
+**Starred** too. Right-click a tray row, or a bill in the **To pay** table, for the tray
+item's menu (see [Working on an item](#working-on-an-item)), which has **Remove the star**
+for a starred file; right-click a **Starred** file
 for **Show in Browse**, **Quick Look**, **Open**, **Show in Finder**, **Remove the star**
 and **Move to To Delete**. **Customize** is where the sections are arranged: each shows a
 fold chevron and **Move up** / **Move down** and can be dragged by its heading, and **Reset

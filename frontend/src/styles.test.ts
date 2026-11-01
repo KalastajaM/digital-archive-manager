@@ -126,7 +126,7 @@ describe("Today and Pay mode", () => {
   it("never cuts a figure on Today: tile values and bill amounts stay on one line, names truncate", () => {
     expect(plain).toMatch(/\.tn-tile-value \{[^}]*white-space: nowrap/);
     expect(plain).toMatch(/\.tn-bill-actions \{[^}]*white-space: nowrap/);
-    expect(plain).toMatch(/\.tn-bill-name > a \{[^}]*text-overflow: ellipsis/);
+    expect(plain).toMatch(/\.tn-bill-title > a \{[^}]*text-overflow: ellipsis/);
   });
 
   it("never wraps a value in Pay mode: the cards wrap, not their values", () => {

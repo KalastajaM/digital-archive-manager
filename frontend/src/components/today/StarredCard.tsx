@@ -6,7 +6,7 @@
 import { Eye, Star } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { errorText, type Member, useBuiltin, useMark } from "../../api/client";
+import { errorText, type Member, useBuiltin } from "../../api/client";
 import { plural } from "../../format";
 import { visible } from "../../text";
 import { LAUNCH_BUSY, LaunchButtons, useFileLaunch } from "../FileLaunch";
@@ -16,47 +16,19 @@ import { useContextMenu } from "../ui/useContextMenu";
 import { browseHref } from "../GroupTree";
 import { MarkIcons, StarGlyph } from "../MarkIcons";
 import { deletionRefusal } from "../MoveTo";
-import { useToast } from "../Toasts";
 import { TRASH_LABEL, useTrash } from "../Trash";
+import { memberName as nameOf, useUnstar } from "../useStarredFiles";
 import { type QLFile, useQuickLook } from "../useQuickLook";
 import { Card } from "../ui/Card";
 import { IconButton } from "../ui/IconButton";
 import type { CardFrame } from "./frame";
-import { baseName } from "../../paths";
 import { collectionHref } from "../../collectionHref";
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const;
 // Differs from paths.ts: takes a bare name, so a "/" in the input is not stripped first.
 const extOf = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : null);
-const nameOf = (m: Member) => (m.path ? baseName(m.path) : m.drive_id);
 /** A member Quick Look and Open can act on: an indexed file that is there. */
 const usable = (m: Member) => !!m.path && !m.is_dir && !m.missing && !m.quarantined;
-
-/** Unstar from the card in one click (☆) or the row's menu; the toast offers Undo. One
- * request at a time. */
-function useUnstar() {
-  const mark = useMark();
-  const toast = useToast();
-  const inFlight = useRef(false);
-  const run = async (m: Member, action: "unstar" | "star") => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    const name = nameOf(m);
-    try {
-      await mark.mutateAsync({ action, ids: [m.drive_id] });
-      toast(
-        action === "unstar"
-          ? { kind: "info", text: `Unstarred ${name}`, action: { label: "Undo", run: () => void run(m, "star") } }
-          : { kind: "info", text: `Starred ${name}` },
-      );
-    } catch (e) {
-      toast({ kind: "error", text: `Could not ${action} ${name}: ${errorText(e)}` });
-    } finally {
-      inFlight.current = false;
-    }
-  };
-  return { busy: mark.isPending, unstar: (m: Member) => void run(m, "unstar") };
-}
 
 function StarredRow({ m, onLook, onMenu }: { m: Member; onLook?: () => void; onMenu: (e: React.MouseEvent) => void }) {
   const launch = useFileLaunch(m.drive_id);

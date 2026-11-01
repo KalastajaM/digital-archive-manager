@@ -32,6 +32,9 @@ All notable changes are listed here. The format follows
 - Today's Starred section now looks like the tray lists: the same font, row height and
   box. Missing and To Delete hints sit under the name, and a long name keeps its
   Important mark in view.
+- A tray row and a bill on Today show ★ when one of the item's files is starred. The file
+  stays in Starred as well. **Remove the star** is in the item's right-click menu, on Today
+  and in Trays.
 
 ## [1.0.0] - 2026-11-01
 

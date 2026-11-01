@@ -687,6 +687,58 @@ describe("Right-click menus on Today", () => {
   });
 });
 
+describe("Today: a starred file in a tray", () => {
+  const member = (drive_id: string, path: string) => ({ drive_id, path, is_dir: false, missing: false, quarantined: false, is_link: false, group_id: null, connected: true, marks: ["starred"] });
+  const starred = (...members: ReturnType<typeof member>[]) => ({ "GET /api/marks/collection/starred": { body: { id: 1, name: "Starred", members } } });
+  const twoFiles = { ...QUOTE, files: ["f1", "f2"] };
+  const withQuote = { open_items: [{ tray_id: "follow-up", items: [twoFiles] }] };
+
+  it("shows ★ on the tray row and keeps the file in Starred", async () => {
+    renderToday(withQuote, starred(member("f2", "30. Home/quote.pdf")));
+    const row = (await screen.findAllByRole("article", { name: QUOTE.title }))[0];
+    await within(row).findByRole("img", { name: "Starred" });
+    expect(within(section("Starred")).getByRole("link", { name: /quote\.pdf/ })).toBeInTheDocument();
+  });
+
+  it("shows no ★ when none of the item's files is starred", async () => {
+    renderToday(withQuote, starred(member("other", "30. Home/other.pdf")));
+    await screen.findByRole("link", { name: /other\.pdf/ });
+    const row = screen.getAllByRole("article", { name: QUOTE.title })[0];
+    expect(within(row).queryByRole("img", { name: "Starred" })).not.toBeInTheDocument();
+  });
+
+  it("the row's menu has Remove the star, which unstars that file", async () => {
+    const { calls, user } = renderToday(withQuote, {
+      ...starred(member("f2", "30. Home/quote.pdf")),
+      "POST /api/marks/unstar": { body: { collection: { id: 1, members: [], groups: [] }, batch: null, problems: [], ongoing_status: null } },
+    });
+    const row = (await screen.findAllByRole("article", { name: QUOTE.title }))[0];
+    await within(row).findByRole("img", { name: "Starred" });
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu", { name: `Actions for ${QUOTE.title}` });
+    await user.click(within(menu).getByRole("menuitem", { name: "Remove the star" }));
+    await waitFor(() => expect(posts(calls, "/api/marks/unstar")).toHaveLength(1));
+    expect(posts(calls, "/api/marks/unstar")[0].body).toEqual({ drive_ids: ["f2"] });
+  });
+
+  it("the menu names each file when several of the item's files are starred", async () => {
+    const { user } = renderToday(withQuote, starred(member("f1", "30. Home/a.pdf"), member("f2", "30. Home/b.pdf")));
+    const row = (await screen.findAllByRole("article", { name: QUOTE.title }))[0];
+    await within(row).findByRole("img", { name: "Starred" });
+    await user.pointer({ keys: "[MouseRight]", target: row });
+    const menu = await screen.findByRole("menu", { name: `Actions for ${QUOTE.title}` });
+    expect(within(menu).getByRole("menuitem", { name: "Remove the star from a.pdf" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Remove the star from b.pdf" })).toBeInTheDocument();
+  });
+
+  it("a bill shows ★ too", async () => {
+    renderToday({}, starred(member("f1", "30. Home/bill.pdf")));
+    const name = await screen.findByRole("link", { name: "Electricity" });
+    const cell = name.closest("td") as HTMLElement;
+    await within(cell).findByRole("img", { name: "Starred" });
+  });
+});
+
 describe("Today: a Renew item", () => {
   const RENEW: TrayDef = {
     id: "renew",

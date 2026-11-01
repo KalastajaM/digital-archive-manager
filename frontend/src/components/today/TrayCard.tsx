@@ -7,6 +7,7 @@ import { visible } from "../../text";
 import { CopyButton } from "../CopyButton";
 import { DoneForm } from "../DoneForm";
 import { ItemBadges } from "../ItemBadges";
+import { ItemStar } from "../MarkIcons";
 import { renewHref, renewLabel, useMarkDone } from "../useMarkDone";
 import { urgency, UrgencyTag } from "../UrgencyTag";
 import { daysBetween, waited } from "./time";
@@ -138,8 +139,11 @@ export function TrayRow({
         onChange={() => void onCheck()}
       />
       <div className="today-row-main">
-        <p className="today-row-title">
-          <Link to={`/trays/${enc(entry.tray)}?item=${item.id}`}>{visible(item.title)}</Link>
+        <p className="today-row-title tray-row-title">
+          <Link to={`/trays/${enc(entry.tray)}?item=${item.id}`} title={title}>
+            {title}
+          </Link>
+          <ItemStar files={item.files} />
         </p>
         {payee && <p className="today-row-sub">{visible(payee)}</p>}
         {full && shown.length > 0 && (

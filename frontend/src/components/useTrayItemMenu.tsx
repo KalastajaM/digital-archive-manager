@@ -1,6 +1,6 @@
 /** A tray item's right-click menu: Mark done (the tray's own label; Reopen for a done
  * item; a Renew item has Renewed… first, then its done label), Move to each other tray, Remove from tray…, then Open item and the item's file
- * (Open file, Show in folder, Show in Finder). One place for the Trays list and Today's
+ * (Open file, Show in folder, Show in Finder), and Remove the star for a starred file. One place for the Trays list and Today's
  * tray rows and bill table, so all say and do the same. Done and Move say what happened in
  * a toast with Undo; Remove asks first (it has no Undo). */
 import { type MouseEvent, type ReactNode, useState } from "react";
@@ -11,6 +11,7 @@ import { visible } from "../text";
 import { LAUNCH_BUSY, useFileLaunch } from "./FileLaunch";
 import { browseHref } from "./GroupTree";
 import { RemoveItemSheet } from "./RemoveItemSheet";
+import { memberName, useStarredOf, useUnstar } from "./useStarredFiles";
 import { useToast } from "./Toasts";
 import type { MenuEntry } from "./ui/Menu";
 import { useContextMenu } from "./ui/useContextMenu";
@@ -78,6 +79,8 @@ export function useTrayItemMenu({
   const done = useDoneFlow();
   const mover = useMoveItemFlow();
   const launch = useFileLaunch("");
+  const starredOf = useStarredOf();
+  const stars = useUnstar();
   const navigate = useNavigate();
   const [removing, setRemoving] = useState<AnyItem | null>(null);
 
@@ -92,6 +95,7 @@ export function useTrayItemMenu({
     const launchWhy = away ?? (launch.busy ? LAUNCH_BUSY : null);
     const launchOff = { disabled: !!launchWhy, reason: launchWhy ?? undefined };
     const renew = renewLabel(tray);
+    const starred = starredOf(item.files);
     return [
       ...(open && renew ? [{ label: renew, onSelect: () => navigate(renewHref(item)) }] : []),
       open
@@ -115,6 +119,13 @@ export function useTrayItemMenu({
       ...(file ? [{ label: "Open file", onSelect: () => void launch.run("open", file), ...launchOff }] : []),
       ...(first?.path && !away ? [{ label: "Show in folder", onSelect: () => navigate(browseHref(first.path!, first.drive_id)) }] : []),
       ...(file ? [{ label: showInLabel(), onSelect: () => void launch.run("reveal", file), ...launchOff }] : []),
+      ...(starred.length > 0 ? (["separator"] as const) : []),
+      // an item may hold several files: then each starred one is named
+      ...starred.map((m) => ({
+        label: starred.length === 1 ? "Remove the star" : `Remove the star from ${visible(memberName(m))}`,
+        onSelect: () => stars.unstar(m),
+        disabled: stars.busy,
+      })),
     ];
   };
 
