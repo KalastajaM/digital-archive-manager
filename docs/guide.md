@@ -1475,6 +1475,8 @@ Tips:
 - A comma lists values, any of which may match: `type:pdf,docx`, `from:Kela,Telia`,
   `tag:insurance,medical`. With a `-` none of them may: `-type:pdf,image`. In quotes the
   comma is part of the value: `in:"30. Bills, 2026"`.
+  After a comma the suggestions are for the next value. A list cannot hold a value with
+  a space, so those are not offered in one.
 - Filters combine with each other (a file must satisfy all of them) and with words:
   `kela type:pdf after:2025`. Two `tag:` filters need both tags unless you pick **Any**
   in the filter row, which asks for at least one.

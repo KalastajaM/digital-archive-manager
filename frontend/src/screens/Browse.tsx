@@ -108,7 +108,7 @@ import { FileActionIcons } from "../components/FileActionIcons";
 import { useFilingAI } from "../components/ai/useFilingAI";
 import { usePutInTrayEntries } from "./FileActions";
 import { SEARCH_DEBOUNCE_MS, useSearch } from "./useSearch";
-import { filterToken, positiveTags, readQuery, sameFilter, type SearchFilter, serializeQuery, splitSearch, withFilter } from "../searchFilters";
+import { filterToken, positiveTags, readQuery, sameFilter, type SearchFilter, serializeQuery, splitSearch, typedFilter, typedList, withFilter } from "../searchFilters";
 import { FilterBar, SearchSuggestions, type TagMode } from "../components/TagSearch";
 import { type Completion, useSearchCompletions } from "../components/useSearchCompletions";
 import { SearchHelp } from "../components/SearchHelp";
@@ -2088,12 +2088,12 @@ export default function Browse() {
   const finishTyped = () => {
     const partial = typed.partial;
     if (!partial) return false;
-    // a comma list (type:pdf,docx) is taken as typed: a suggestion would replace all of it
-    const list = !partial.quoted && partial.value.includes(",");
-    const values = list ? [] : offered.filter((c) => c.kind === "value");
-    const exact = values.find((c) => c.filter.value.toLowerCase() === partial.value.trim().toLowerCase());
-    const typedFilter = { name: partial.name, negated: partial.negated, value: partial.value.trim(), ...(list ? { anyOf: true } : {}) };
-    const chosen = (exact ?? values[0])?.filter ?? (partial.value.trim() ? typedFilter : null);
+    // after a trailing comma (type:pdf,) nothing is being typed: the list as it stands
+    const { chosen: listed, last } = typedList(partial);
+    const values = listed.length > 0 && !last.trim() ? [] : offered.filter((c) => c.kind === "value");
+    const whole = typedFilter(partial);
+    const exact = values.find((c) => c.filter.value.toLowerCase() === whole?.value.toLowerCase());
+    const chosen = (exact ?? values[0])?.filter ?? whole;
     if (!chosen) return false;
     addFilters([chosen], typed.rest.trim());
     setQuery(typed.rest);

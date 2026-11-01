@@ -239,6 +239,27 @@ describe("Search and jump", () => {
       expect(box()).toHaveFocus();
     });
 
+    it("after a comma lists the values for the part after it, and taking one keeps the list", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "type:pdf,");
+      await waitFor(() => expect(values()).toContain("type:pdf,image"));
+      expect(values()).not.toContain("type:pdf,pdf"); // what is listed already is not offered
+      await user.type(box(), "sh");
+      await waitFor(() => expect(values()).toEqual(["type:pdf,sheet"]));
+      await user.keyboard("{Enter}");
+      expect(box()).toHaveValue("type:pdf,sheet ");
+    });
+
+    it("does not offer a name with a space inside a list", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Open" }));
+      await user.type(box(), "collection:");
+      await waitFor(() => expect(values().join()).toContain("2026 House sale"));
+      await user.type(box(), "x,2026");
+      await waitFor(() => expect(screen.queryByRole("group", { name: "Filters" })).toBeNull());
+    });
+
     it("Tab takes the active value too, quotes it when it has spaces, and later filters still work", async () => {
       const { user } = setup();
       await user.click(screen.getByRole("button", { name: "Open" }));
