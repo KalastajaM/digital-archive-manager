@@ -6,6 +6,18 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-01
+
+The 1.0 release. In short:
+
+- The Renew tray, for passports, ID cards, insurance and other papers that expire.
+- Collections nest inside each other instead of having groups (converted the first time
+  this version opens, after a snapshot).
+- Browse holds the Collections and Tags trees, with actions on several files at once,
+  Merge into…, Delete… and more right-click menus.
+- Your own business ID no longer links all your documents in Relatives.
+- The Classic look is gone; New is the only look.
+
 ### Added
 
 - **The Renew tray.** A fifth tray for papers that expire (passport, ID card, driving
