@@ -1,7 +1,8 @@
 import { File as FileIcon, Folder, Layers, ListFilter, type LucideIcon, Search, Tag as TagIcon } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAllTags, useCollections, useFolders, useTrays } from "../api/client";
+import { useAllTags, useCollections, useFolders, useSavedSearches, useTrays } from "../api/client";
+import { savedSearchHref } from "../savedSearch";
 import { useKeydown } from "../keyboard";
 import { baseName, parentOf } from "../paths";
 import { isSearchKey } from "../searchKey";
@@ -73,7 +74,7 @@ function best<T>(items: T[], words: string[], text: (item: T) => string, limit: 
     .map((x) => x[2]);
 }
 
-const MAX = { trays: 6, collections: 8, tags: 8, folders: 8, files: 8 };
+const MAX = { trays: 6, collections: 8, saved: 6, tags: 8, folders: 8, files: 8 };
 
 /** The text before the caret, split into words and filters, and where the token being
  * typed starts in it. A quoted value may hold spaces, so a partial one starts before its
@@ -87,7 +88,7 @@ function tokenAtCaret(before: string) {
 /** The palette's results for what is typed. The lists (trays, collections, tags, folders)
  * come from the app's own cached requests; files from the search, once two characters
  * are typed; filter names and values from the same completions as Browse's search box.
- * Empty, it offers the trays and collections to jump to. A last row always searches the
+ * Empty, it offers the trays, collections and saved searches to jump to. A last row always searches the
  * archive for the whole text. */
 function useResults(query: string, typed: ReturnType<typeof splitSearch>, suggestOpen: boolean) {
   const text = query.trim();
@@ -97,6 +98,7 @@ function useResults(query: string, typed: ReturnType<typeof splitSearch>, sugges
   const collections = useCollections("open");
   const tags = useAllTags("");
   const folders = useFolders();
+  const saved = useSavedSearches();
   const whole = splitSearch(query);
   const files = useSearch(text.length >= 2 && !typed.partial ? text : "");
   const completions = useSearchCompletions(typed, whole.filters, suggestOpen && !nothing);
@@ -121,6 +123,9 @@ function useResults(query: string, typed: ReturnType<typeof splitSearch>, sugges
       for (const c of best(collections.data ?? [], words, (c) => c.name, MAX.collections)) {
         const where = c.path.slice(0, -1).map(visible).join(" / ");
         out.push({ key: `collection:${c.id}`, group: "Collections", label: visible(c.name), hint: where || undefined, icon: Layers, to: collectionHref(c) });
+      }
+      for (const q of best(saved.data ?? [], words, (q) => q.name, MAX.saved)) {
+        out.push({ key: `saved:${q.id}`, group: "Saved searches", label: visible(q.name), hint: visible(q.query), icon: Search, to: savedSearchHref(q) });
       }
     }
     if (words.length > 0) {
@@ -169,7 +174,7 @@ function useResults(query: string, typed: ReturnType<typeof splitSearch>, sugges
     return out;
     // the words are the text, split: they change exactly when it does
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, offered, trays.data, collections.data, tags.data, folders.data, files.hits]);
+  }, [text, offered, trays.data, collections.data, saved.data, tags.data, folders.data, files.hits]);
   return { items, suggesting: offered.length > 0, searching: text.length >= 2 && !typed.partial && files.hits === null && !files.error, fileError: files.error };
 }
 

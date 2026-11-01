@@ -1,8 +1,11 @@
 /** The ? next to a search box: a small popup listing every filter with an example and a
- * line, and a few tips. A click on an example puts it in the search box; the link opens
- * the guide's Searching section. Esc and a click outside close it. */
+ * line, the owner's saved searches (their own examples), and a few tips. A click on an
+ * example or a saved search's query puts it in the search box; the link opens the
+ * guide's Searching section. Esc and a click outside close it. */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useSavedSearches } from "../api/client";
+import { visible } from "../text";
 import { FILTER_HELP } from "../searchFilters";
 import { Popover } from "./ui/Popover";
 
@@ -17,6 +20,7 @@ export function SearchHelp({ onUse }: { onUse: (example: string) => void }) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const first = useRef<HTMLButtonElement>(null);
+  const saved = useSavedSearches().data ?? [];
   useEffect(() => {
     if (open) first.current?.focus({ preventScroll: true });
   }, [open]);
@@ -56,6 +60,29 @@ export function SearchHelp({ onUse }: { onUse: (example: string) => void }) {
                 </li>
               ))}
             </ul>
+            {saved.length > 0 && (
+              <>
+                <h4>Your saved searches</h4>
+                <ul className="search-help-list search-help-saved">
+                  {saved.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        className="search-help-example"
+                        title={visible(s.query)}
+                        onClick={() => {
+                          onUse(s.query);
+                          setOpen(false);
+                        }}
+                      >
+                        {visible(s.query)}
+                      </button>
+                      <span title={visible(s.name)}>{visible(s.name)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <ul className="search-help-tips">
               {TIPS.map((t) => (
                 <li key={t}>{t}</li>

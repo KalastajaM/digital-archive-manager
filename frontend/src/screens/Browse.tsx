@@ -28,8 +28,11 @@ import {
   LOCKED_REASON,
   useCollectionsWithMarked,
   useCreateFolder,
+  useSavedSearches,
   useStatus,
 } from "../api/client";
+import { SaveSearchSheet } from "../components/SaveSearchSheet";
+import { queryToSave, sameSearch } from "../savedSearch";
 import { childrenOf } from "../components/collectionTree";
 import { FitText } from "../components/FitText";
 import { attentionTags } from "../components/GroupTree";
@@ -878,6 +881,12 @@ export default function Browse() {
   const inFolder = scope === "folder" && !!paths[sp];
   const folder = inFolder ? paths[sp] : "";
   const search = useSearch(serializeQuery(q, filters), folder, reload, tagMode);
+  // Save search…: the search as on screen (This folder written as in:), named after the
+  // saved search it is, if any, so saving again under that name replaces it
+  const [saving, setSaving] = useState(false);
+  const savedSearches = useSavedSearches();
+  const toSave = queryToSave(q, filters, folder);
+  const savedName = savedSearches.data?.find((s) => sameSearch(s, { query: toSave, tag_mode: tagMode }))?.name;
   // Folders: the results under their folders (a folded folder hides its files); Files: flat.
   // Folding is forgotten when the search changes.
   const grouped = searching && panes[sp].view === "folders";
@@ -1808,13 +1817,14 @@ export default function Browse() {
             </p>
           )
         )}
-        {isSearch && filters.length > 0 && (
+        {isSearch && (
           <FilterBar
             filters={filters}
             mode={tagMode}
             onMode={setTagMode}
             onRemove={(f) => setFilters(filters.filter((x) => !sameFilter(x, f)))}
             onAdd={(name) => addTags([name])}
+            onSave={() => setSaving(true)}
           />
         )}
         {checkedFiles > 0 && (
@@ -2580,6 +2590,7 @@ export default function Browse() {
         />
       )}
       {rowTools.view}
+      {saving && <SaveSearchSheet mode="save" query={toSave} tagMode={tagMode} initial={savedName} onClose={() => setSaving(false)} />}
     </div>
   );
 }

@@ -26,12 +26,16 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   archiveKey,
   type CollectionRow,
+  errorText,
+  type SavedSearch,
   type SidebarTag,
   type TagInfo,
   type TrayDef,
   useBuiltin,
   useAllTags,
   useCollections,
+  useSavedSearchActions,
+  useSavedSearches,
   useSidebarTags,
   useStatus,
   useToday,
@@ -55,7 +59,9 @@ import {
   childrenOf,
 } from "../collectionTree";
 import { anyMoveRunning, backToInbox, inboxRefusal, MOVE_BUSY, useInboxFolder, useMoveFlow } from "../MoveTo";
-import { useBlockToastActions } from "../Toasts";
+import { undoAction, useBlockToastActions, useToast } from "../Toasts";
+import { SaveSearchSheet } from "../SaveSearchSheet";
+import { sameSearch, savedSearchHref } from "../../savedSearch";
 import {
   type CollectionOrder,
   orderKeys,
@@ -495,6 +501,83 @@ function StarredRow() {
   );
 }
 
+/** A saved search's count as the sidebar shows it: "500+" past the cap, nothing for 0. */
+const savedCount = (s: SavedSearch) => (s.count === null || (s.count === 0 && !s.more) ? null : s.more ? `${s.count}+` : String(s.count));
+
+/** The Searches section: the saved searches by name, each with its number of matches,
+ * opening Browse with the search. Hover a name for its query (and why it is refused now,
+ * if it is); right-click for Open, Rename… and Delete (with Undo). Hidden while there are
+ * none: a search is saved from Browse's filter row. */
+function SearchesSection({ sections }: { sections: SectionFolds }) {
+  const saved = useSavedSearches();
+  const actions = useSavedSearchActions();
+  const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const menu = useMenuAt();
+  const [renaming, setRenaming] = useState<SavedSearch | null>(null);
+  const list = saved.data ?? [];
+  if (list.length === 0 && !renaming) return null;
+  const params = location.pathname === "/browse" ? new URLSearchParams(location.search) : null;
+  const shown = params && { query: params.get("q") ?? "", tag_mode: params.get("tag_mode") === "any" ? ("any" as const) : ("all" as const) };
+  const remove = async (s: SavedSearch) => {
+    try {
+      await actions.remove(s.id);
+      toast({
+        kind: "info",
+        text: `Deleted the search "${visible(s.name)}"`,
+        action: undoAction(
+          () =>
+            void actions
+              .save({ name: s.name, query: s.query, tag_mode: s.tag_mode })
+              .catch((e) => toast({ kind: "error", text: errorText(e) })),
+        ),
+      });
+    } catch (e) {
+      toast({ kind: "error", text: errorText(e) });
+    }
+  };
+  const entries = (s: SavedSearch): MenuEntry[] => [
+    { label: "Open", onSelect: () => navigate(savedSearchHref(s)) },
+    { label: "Rename…", onSelect: () => setRenaming(s) },
+    "separator",
+    { label: "Delete", onSelect: () => void remove(s) },
+  ];
+  return (
+    <>
+      {list.length > 0 && (
+        <Section title="Searches" folded={sections.folded.has("searches")} onFold={() => sections.toggle("searches")} foldedCount={list.length}>
+          {list.map((s) => {
+            const name = visible(s.name);
+            const count = savedCount(s);
+            const isCurrent = !!shown && shown.query !== "" && sameSearch(shown, s);
+            const tip = `${name}\n${visible(s.query)}${s.tag_mode === "any" ? " (any tag)" : ""}${s.error ? `\n${visible(s.error)}` : ""}`;
+            return (
+              <li key={s.id}>
+                {/* a plain Link, as the tags: every saved search shares /browse */}
+                <Link
+                  to={savedSearchHref(s)}
+                  className={isCurrent ? "sidebar-row active" : "sidebar-row"}
+                  aria-label={count ? `${name} (${count})` : name}
+                  aria-current={isCurrent ? "page" : undefined}
+                  title={tip}
+                  onContextMenu={menu.open(`Actions for ${name}`, () => entries(s))}
+                >
+                  <Search className="sidebar-icon" {...ICON} />
+                  <span className="sidebar-label">{name}</span>
+                  {count && <span className="sidebar-count">{count}</span>}
+                </Link>
+              </li>
+            );
+          })}
+        </Section>
+      )}
+      {menu.element}
+      {renaming && <SaveSearchSheet mode="rename" search={renaming} onClose={() => setRenaming(null)} />}
+    </>
+  );
+}
+
 /** The Tags section: its caption opens the Tags screen; below it the pinned tags, then the
  * most recently used ones (eight in all), each opening its files in Browse. The Tags
  * screen is a row in the Archive section, and the tags are two sections, "Pinned tags" and
@@ -650,6 +733,7 @@ export function Sidebar({ footer, onSearch }: Props) {
             ))}
           </Section>
           <CollectionsSection list={collections.data ?? []} sections={sections} />
+          <SearchesSection sections={sections} />
           <TagsSection sections={sections} />
           <Section title="Archive" folded={sections.folded.has("archive")} onFold={() => sections.toggle("archive")}>
             <TagsRow />
