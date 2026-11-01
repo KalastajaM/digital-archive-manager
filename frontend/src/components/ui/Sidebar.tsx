@@ -506,7 +506,8 @@ const savedCount = (s: SavedSearch) => (s.count === null || (s.count === 0 && !s
 
 /** The Searches section: the saved searches by name, each with its number of matches,
  * opening Browse with the search. Hover a name for its query (and why it is refused now,
- * if it is); right-click for Open, Rename… and Delete (with Undo). Hidden while there are
+ * if it is); right-click for Open, Update to current search (the one Browse shows), Rename…
+ * and Delete (both changes with Undo). Hidden while there are
  * none: a search is saved from Browse's filter row. */
 function SearchesSection({ sections }: { sections: SectionFolds }) {
   const saved = useSavedSearches();
@@ -537,8 +538,39 @@ function SearchesSection({ sections }: { sections: SectionFolds }) {
       toast({ kind: "error", text: errorText(e) });
     }
   };
+  // Update to current search: the search Browse shows now replaces this one's query
+  // (Undo puts the old one back)
+  const update = async (s: SavedSearch, to: { query: string; tag_mode: "all" | "any" }) => {
+    try {
+      await actions.save({ name: s.name, query: to.query, tag_mode: to.tag_mode, replace: true });
+      toast({
+        kind: "info",
+        text: `Updated the search "${visible(s.name)}"`,
+        action: undoAction(
+          () =>
+            void actions
+              .save({ name: s.name, query: s.query, tag_mode: s.tag_mode, replace: true })
+              .catch((e) => toast({ kind: "error", text: errorText(e) })),
+        ),
+      });
+    } catch (e) {
+      toast({ kind: "error", text: errorText(e) });
+    }
+  };
+  const updateEntry = (s: SavedSearch): MenuEntry => {
+    const current = shown && shown.query.trim() ? shown : null;
+    const reason = !current ? "Open a search in Browse first" : sameSearch(current, s) ? "Browse shows this search already" : undefined;
+    return {
+      label: "Update to current search",
+      tip: current && !reason ? `Save ${visible(current.query)} as ${visible(s.name)}` : undefined,
+      disabled: !!reason,
+      reason,
+      onSelect: () => current && void update(s, current),
+    };
+  };
   const entries = (s: SavedSearch): MenuEntry[] => [
     { label: "Open", onSelect: () => navigate(savedSearchHref(s), { state: SEARCH_EVERYWHERE }) },
+    updateEntry(s),
     { label: "Rename…", onSelect: () => setRenaming(s) },
     "separator",
     { label: "Delete", onSelect: () => void remove(s) },
