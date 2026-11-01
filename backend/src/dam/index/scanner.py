@@ -223,6 +223,7 @@ class _Scan:
             if is_dir or is_link:
                 fresh.index_state = "unsupported"
             elif changed:
+                repo.note_rewritten(current)
                 fresh.index_state = "pending"
                 fresh.sha256 = None
                 fresh.attempts = 0

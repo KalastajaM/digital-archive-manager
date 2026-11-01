@@ -130,6 +130,7 @@ export type RelativeKind = RelativeLink["kind"];
 export type RelativeDismissed = Schemas["RelativeDismissedOut"];
 // Phase 2
 export type Today = Schemas["TodayOut"];
+export type ContentChange = Schemas["ContentChangeOut"];
 export type AttentionItem = Schemas["AttentionItemOut"];
 export type TrayCount = Schemas["TrayCountOut"];
 export type TrayDef = Schemas["TrayDef"];
@@ -1014,6 +1015,33 @@ export const useFileDetail = (driveId: string, enabled = true) =>
     queryFn: ({ signal }) => apiGet("/api/files/{drive_id}", { path: { drive_id: driveId }, signal }),
     enabled: enabled && driveId !== "",
   });
+
+/** Mark content change notices as seen (``ids`` null: every open one); Today, the file
+ * panels and an ``is:changed`` search follow. */
+export const useSeeContentChanges = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[] | null) =>
+      apiPost("/api/content-changes/seen", { body: ids === null ? {} : { drive_ids: ids } }),
+    onSettled: () => contentChangesMoved(client),
+  });
+};
+
+/** Undo of ``useSeeContentChanges``. */
+export const useUnseeContentChanges = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => apiPost("/api/content-changes/unseen", { body: { drive_ids: ids } }),
+    onSettled: () => contentChangesMoved(client),
+  });
+};
+
+const contentChangesMoved = (client: QueryClient) => {
+  window.dispatchEvent(new Event(SEARCH_STALE)); // an is:changed search on screen
+  return Promise.all(
+    [keys.today, keys.file, keys.browse].map((queryKey) => client.invalidateQueries({ queryKey })),
+  );
+};
 
 /** What the rules and the scan suggest for a file anywhere in the archive. */
 export const useFileSuggestions = (driveId: string, enabled = true) =>

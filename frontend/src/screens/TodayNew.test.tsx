@@ -4,7 +4,7 @@ import { cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AttentionItem, Item, Today as TodayData, TrayDef } from "../api/client";
+import type { AttentionItem, ContentChange, Item, Today as TodayData, TrayDef } from "../api/client";
 import { setDragFiles } from "../dnd";
 import { CARD_DRAG_TYPE, LAYOUT_KEY } from "../components/useCardLayout";
 import { type Call, dataTransfer, mockFetch, renderWithProviders } from "../test-utils";
@@ -107,6 +107,7 @@ const TODAY: TodayData = {
   },
   unmanaged_ongoing: 4,
   unmanaged_important: 1,
+  content_changes: { count: 0, rows: [] },
   ongoing_sync_failure: null,
   reminders: { last_run: null, errors: {}, skipped: null },
   tray_errors: [],
@@ -175,6 +176,7 @@ describe("Today: header and tiles", () => {
       open_items: [],
       unmanaged_ongoing: 0,
       unmanaged_important: 0,
+      content_changes: { count: 0, rows: [] },
       inbox_stats: { ...TODAY.inbox_stats, count: 0, oldest_days: null },
     });
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("All clear");
@@ -556,6 +558,7 @@ describe("Today: arranging by drag and keyboard", () => {
       "inbox",
       "|",
       "starred",
+      "changes",
       "collections",
       "reminders",
     ]);
@@ -748,5 +751,63 @@ describe("Today: a Renew item", () => {
     await user.click(within(menu).getByRole("menuitem", { name: "Renewed…" }));
     expect(await screen.findByTestId("where")).toHaveTextContent("/trays/renew?item=9&do=renew");
     expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/done"))).toHaveLength(0);
+  });
+});
+
+describe("Today: Changed files", () => {
+  const change = (id: string, name: string, over: Partial<ContentChange> = {}): ContentChange => ({
+    drive_id: id,
+    path: `10. Home/${name}`,
+    name,
+    was_size: 2048,
+    was_mtime: 1_760_000_000,
+    size: 4096,
+    mtime: 1_761_000_000,
+    detected_at: 1_761_000_100,
+    ...over,
+  });
+
+  it("is not there while nothing changed", async () => {
+    renderToday();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("list", { name: "Changed files" })).not.toBeInTheDocument();
+  });
+
+  it("lists each file with what changed, a link to Browse and Show all", async () => {
+    const LONG = `${"very long name ".repeat(12)}.pdf`;
+    renderToday({
+      content_changes: {
+        count: 10,
+        rows: [change("a", "Lease.docx"), change("b", LONG, { size: 2048 })],
+      },
+    });
+    const list = await screen.findByRole("list", { name: "Changed files" });
+    const link = within(list).getByRole("link", { name: "Lease.docx" });
+    expect(link.getAttribute("href")).toContain("select=a");
+    expect(within(list).getByText(/was 2,0 KB, now 4,0 KB/)).toBeInTheDocument();
+    expect(within(list).getByText(/same size/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Show all changed files" })).toHaveAttribute("href", "/browse?q=is%3Achanged");
+    expect(screen.getByRole("link", { name: "8 more files" })).toBeInTheDocument();
+    expect(screen.getByText("10 files")).toBeInTheDocument();
+  });
+
+  const SEEN = {
+    "POST /api/content-changes/seen": { body: { drive_ids: ["a"] } },
+    "POST /api/content-changes/unseen": { body: { drive_ids: ["a"] } },
+  };
+
+  it("Mark as seen asks for that file, and the toast's Undo takes it back", async () => {
+    const { calls, user } = renderToday({ content_changes: { count: 1, rows: [change("a", "Lease.docx")] } }, SEEN);
+    const list = await screen.findByRole("list", { name: "Changed files" });
+    await user.click(within(list).getByRole("button", { name: "Mark as seen" }));
+    await waitFor(() => expect(posts(calls, "/api/content-changes/seen")[0]?.body).toEqual({ drive_ids: ["a"] }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/content-changes/unseen")[0]?.body).toEqual({ drive_ids: ["a"] }));
+  });
+
+  it("Mark all seen sends no ids", async () => {
+    const { calls, user } = renderToday({ content_changes: { count: 2, rows: [change("a", "A.docx"), change("b", "B.docx")] } }, SEEN);
+    await user.click(await screen.findByRole("button", { name: "Mark all seen" }));
+    await waitFor(() => expect(posts(calls, "/api/content-changes/seen")[0]?.body).toEqual({}));
   });
 });

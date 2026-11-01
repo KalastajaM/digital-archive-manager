@@ -49,6 +49,24 @@ files = Table(
     Index("ix_files_parked_at", "parked_at"),
 )
 
+# A file whose content differs from what dam last knew (0049): the scanner keeps the old
+# hash here (``was_*``) when size or mtime moved, the read that follows fills in the new one
+# (``sha256``, ``size``, ``mtime``) or removes the row when the content is the same. One row
+# per file; ``seen_at`` set: the owner has seen the notice. No FK to files, as summaries.
+content_changes = Table(
+    "content_changes",
+    metadata,
+    Column("drive_id", Text, primary_key=True),
+    Column("was_sha256", Text, nullable=False),
+    Column("was_size", Integer),
+    Column("was_mtime", Float),
+    Column("sha256", Text, nullable=True),
+    Column("size", Integer),
+    Column("mtime", Float),
+    Column("detected_at", Float, nullable=True),
+    Column("seen_at", Float, nullable=True),
+)
+
 file_text = Table(
     "file_text",
     metadata,

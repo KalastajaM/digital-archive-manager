@@ -6,7 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from dam.api.schemas.responses import Mark
+from dam.api.schemas.base import StrictIn
+from dam.api.schemas.responses import ContentChangeOut, Mark
 from dam.api.schemas.rules import RuleErrorOut
 from dam.api.schemas.trays import ItemOut
 
@@ -82,6 +83,20 @@ class TrayItemsOut(BaseModel):
     items: list[ItemOut]
 
 
+class ContentChangesOut(BaseModel):
+    count: int  # every notice not yet seen; ``rows`` may hold fewer
+    rows: list[ContentChangeOut]
+
+
+class ContentChangesSeenIn(StrictIn):
+    # no ids on ``seen``: every open notice
+    drive_ids: list[str] | None = Field(default=None, max_length=10000)
+
+
+class ContentChangesSeenOut(BaseModel):
+    drive_ids: list[str]
+
+
 class TodayOut(BaseModel):
     attention: list[AttentionItemOut]
     overview: OverviewOut
@@ -100,3 +115,5 @@ class TodayOut(BaseModel):
     # inbox files the barcode pass has still to read for QR stickers ("Reading filing
     # codes..."); 0 when the code table is empty
     reading_codes: int = 0
+    # files whose content changed: the newest few of them, and how many in all
+    content_changes: ContentChangesOut = ContentChangesOut(count=0, rows=[])

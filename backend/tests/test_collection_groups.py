@@ -320,7 +320,7 @@ def test_migration_0011_upgrades_a_db_at_0010(tmp_path: Path, new_engine):
         conn.execute(text("INSERT INTO collection_members VALUES (1, 'd1', 1.0, NULL)"))
     migrate(engine)
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0048"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0049"
         assert conn.execute(text("SELECT summary FROM collections")).scalar() == ""
         assert conn.execute(text("SELECT drive_id, group_id FROM collection_members")).one() == (
             "d1",

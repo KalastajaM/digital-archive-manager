@@ -126,6 +126,7 @@ const TODAY: TodayData = {
   },
   unmanaged_ongoing: 0,
   unmanaged_important: 0,
+  content_changes: { count: 0, rows: [] },
   ongoing_sync_failure: null,
   reminders: { last_run: null, errors: {}, skipped: null },
   tray_errors: [],
