@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "SQLAlchemy>=2.0",
     "alembic",
-    "pydantic>=2",
+    "pydantic>=2.14.2",
     "PyYAML",
     "typer",
     "fastapi",
