@@ -216,8 +216,8 @@ def test_apply_refuses_a_stale_current_text(app, client, user_file):
 
 
 def test_untouched_and_custom_trays_have_empty_diff(app, client):
-    diff = client.get("/api/trays/to-read/defaults-diff").json()
-    assert diff["file"] == "30-to-read.yaml"
+    diff = client.get("/api/trays/to-action/defaults-diff").json()
+    assert diff["file"] == "20-to-action.yaml"
     assert diff["added"] == [] and diff["new_text"] == diff["current_text"]
     (app.trays_dir / "40-mine.yaml").write_text(
         "id: mine\nname: Mine\norder: 4\n", encoding="utf-8"

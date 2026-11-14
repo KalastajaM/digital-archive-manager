@@ -70,10 +70,10 @@ def test_inbox_entry_tray_guess_and_open_trays(app, fake_archive):
 
 
 def test_rule_tray_overrides_the_heuristic(app, fake_archive):
-    add_rule(app, folder=BANKS, tray="to-read")
+    add_rule(app, folder=BANKS, tray="follow-up")
     add_scan(app, fake_archive, "a.pdf", "id-a", NORTHPOWER_BILL)
     [entry] = app.inbox.list()
-    assert entry.tray_guess == "to-read"
+    assert entry.tray_guess == "follow-up"
 
 
 def test_filing_into_a_tray_the_file_is_already_in_is_refused(app, fake_archive):
@@ -87,7 +87,7 @@ def test_filing_into_a_tray_the_file_is_already_in_is_refused(app, fake_archive)
     assert app.repo.get("id-a").path == f"{INBOX}/a.pdf"  # nothing moved
     assert len(app.trays.list("to-pay")) == 1
     # another tray, or no tray, is fine
-    app.inbox.preview([FileRequest("id-a", "a.pdf", BANKS, tray="to-read")])
+    app.inbox.preview([FileRequest("id-a", "a.pdf", BANKS, tray="follow-up")])
     app.inbox.preview([FileRequest("id-a", "a.pdf", BANKS)])
 
 

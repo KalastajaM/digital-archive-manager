@@ -383,7 +383,7 @@ def rich(app, pair):
     app.notes.add_check("file", "id-dup", "call the bank")
     app.notes.add_check("file", "id-keep", "Call the bank")  # the same, other case
     app.notes.add_check("file", "id-dup", "file the form")
-    item = app.trays.create_quick("to-read", ["id-dup"]).created[0]
+    item = app.trays.create_quick("follow-up", ["id-dup"]).created[0]
     app.people = None
     app.assignments.set(["id-dup"], sender="Pohjola")
     app.assignments.set(["id-keep"], sender="Existing sender")
@@ -399,7 +399,7 @@ def test_carry_over_is_listed_in_the_preview_and_added_after(app, pair, rich):
     assert sorted(c.collections) == ["Starred", "Tax 2023"]
     assert c.notes == ["paid in June"]
     assert c.checklist == ["file the form"]  # "call the bank" is there already
-    assert len(c.items) == 1 and c.items[0].startswith("To read")
+    assert len(c.items) == 1 and c.items[0].startswith("Follow up")
     assert c.sender is None  # the kept copy has one: never overwritten
     assert app.tags.for_file("id-keep") == ["2023"]  # a dry run adds nothing
 
@@ -514,7 +514,7 @@ def test_a_listed_folder_drops_out_once_it_is_marked_for_deletion(app, fake_arch
 def test_the_default_folders_are_not_listed_when_empty(app, fake_archive):
     fake_archive.add(f"{BANKS}/keeps-this-folder.txt", b"k", drive_id="id-k")
     (fake_archive.root / INBOX / "To pay").mkdir(parents=True)  # a filing code's folder
-    (fake_archive.root / INBOX / "to read").mkdir()  # the same, in other case
+    (fake_archive.root / INBOX / "follow-up").mkdir()  # the same, in other case
     (fake_archive.root / INBOX / "Scans").mkdir()  # the owner's own: listed
     (fake_archive.root / QUAR).mkdir(exist_ok=True)
     app.scan()
@@ -577,7 +577,7 @@ def test_collection_and_tray_entries_pointing_nowhere(app, fake_archive):
     app.scan()
     col = app.collections.create("Trip")
     app.collections.add_members(col.id, ["id-a", "id-b", "id-c"])
-    app.trays.create_quick("to-read", ["id-a"])
+    app.trays.create_quick("follow-up", ["id-a"])
     app.browse.quarantine(["id-a"], origin="ui")  # in To Delete
     (fake_archive.root / BANKS / "b.pdf").write_bytes(b"x")  # stays: present
     (fake_archive.root / BANKS / "c.pdf").rename(fake_archive.root / "elsewhere.tmp")
@@ -588,8 +588,8 @@ def test_collection_and_tray_entries_pointing_nowhere(app, fake_archive):
     assert rows[("collection", "id-c")][0] == "missing"
     assert ("collection", "id-b") not in rows
     [tray_row] = [r for r in result.items if r.kind == "tray"]
-    assert tray_row.owner_id == "to-read" and tray_row.reason == "in To Delete"
-    assert tray_row.owner_name.startswith("To read")
+    assert tray_row.owner_id == "follow-up" and tray_row.reason == "in To Delete"
+    assert tray_row.owner_name.startswith("Follow up")
     assert tray_row.item_id is not None
 
 

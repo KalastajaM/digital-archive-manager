@@ -8,10 +8,6 @@
   label: To pay
   tray: to-pay
   inbox_folder: To pay
-- code: R
-  label: To read
-  tray: to-read
-  inbox_folder: To read
 - code: F
   label: Follow-up
   tray: follow-up

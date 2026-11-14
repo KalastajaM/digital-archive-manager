@@ -189,10 +189,10 @@ def test_negated_date(archive):
 
 def test_tray_by_id_or_name_open_items_only(archive):
     archive.trays.create_quick("to-pay", ["bill", "tax"])
-    archive.trays.create_quick("to-read", ["doc"])
+    archive.trays.create_quick("follow-up", ["doc"])
     assert ids(archive, "tray:to-pay") == ["bill", "tax"]
     assert ids(archive, 'tray:"To pay"') == ["bill", "tax"]
-    assert ids(archive, "tray:TO-READ") == ["doc"]
+    assert ids(archive, "tray:FOLLOW-UP") == ["doc"]
     assert ids(archive, "tray:nope") == []
     assert ids(archive, "type:pdf -tray:to-pay") == ["kela", "other", "sale1"]
 
@@ -434,7 +434,7 @@ def test_from_and_for_star(archive):
 
 def test_tray_star_is_any_open_item(archive):
     archive.trays.create_quick("to-pay", ["bill", "tax"])
-    archive.trays.create_quick("to-read", ["doc"])
+    archive.trays.create_quick("follow-up", ["doc"])
     assert ids(archive, "tray:*") == ["bill", "doc", "tax"]
     assert ids(archive, "type:pdf -tray:*") == ["kela", "other", "sale1"]
 

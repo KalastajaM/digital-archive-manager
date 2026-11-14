@@ -351,9 +351,9 @@ def test_unknown_tray_and_fields_are_nulled(tapp):
     assert r.data["tray"] is None and r.data["tray_fields"] == {}
     assert r.data["rejected"]["tray"] == "unknown tray"
     # a field the chosen tray does not have (to-read has none of these)
-    tapp.ai.provider.reply = lambda **_kw: good_filing(tray="to-read")
+    tapp.ai.provider.reply = lambda **_kw: good_filing(tray="follow-up")
     r = tapp.ai.run(tapp.ai.prepare("suggest-filing", {"drive_id": "in1", "refresh": True}).token)
-    assert r.data["tray"] == "to-read" and r.data["tray_fields"] == {}
+    assert r.data["tray"] == "follow-up" and r.data["tray_fields"] == {}
     assert r.data["rejected"]["tray_fields.amount"] == "unknown field"
 
 

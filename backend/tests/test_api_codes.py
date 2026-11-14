@@ -2,7 +2,7 @@
 
 from test_api import LOCAL_ORIGIN, make_client
 
-SEEDED = ["A", "P", "R", "F", "D"]
+SEEDED = ["A", "P", "F", "D"]
 
 
 def put(client, url, body):
@@ -14,7 +14,7 @@ def test_get_lists_seeded_codes(app):
         r = c.get("/api/filing-codes")
     assert r.status_code == 200
     data = r.json()
-    assert [x["code"] for x in data["codes"]] == ["A", "P", "R", "F", "D"]
+    assert [x["code"] for x in data["codes"]] == ["A", "P", "F", "D"]
     assert data["problems"] == []
     assert data["warnings"] == []
 
@@ -69,4 +69,4 @@ def test_get_reports_hand_edit_problem(app):
         data = c.get("/api/filing-codes").json()
     assert len(data["problems"]) == 1
     assert data["problems"][0]["code"] == "TOOLONG"
-    assert len(data["codes"]) == 5
+    assert len(data["codes"]) == 4

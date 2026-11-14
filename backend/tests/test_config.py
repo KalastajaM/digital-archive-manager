@@ -40,7 +40,6 @@ def test_ensure_seeds_trays(tmp_path):
     assert sorted(p.name for p in trays.iterdir()) == [
         "10-to-pay.yaml",
         "20-to-action.yaml",
-        "30-to-read.yaml",
         "40-follow-up.yaml",
         "50-renew.yaml",
     ]
@@ -61,9 +60,9 @@ def test_ensure_adds_trays_to_existing_config_without_touching_it(tmp_path):
         encoding="utf-8"
     ) == "archive_root: /custom\n"
     # a tray file the user removed stays removed
-    (paths.config_dir / "trays" / "30-to-read.yaml").unlink()
+    (paths.config_dir / "trays" / "20-to-action.yaml").unlink()
     paths.ensure()
-    assert not (paths.config_dir / "trays" / "30-to-read.yaml").exists()
+    assert not (paths.config_dir / "trays" / "20-to-action.yaml").exists()
 
 
 def test_ensure_never_overwrites_files_when_settings_missing(tmp_path):
@@ -98,12 +97,11 @@ def test_ensure_offers_a_new_default_tray_once_to_an_existing_install(tmp_path):
     (paths.config_dir / "settings.yaml").write_text("archive_root: /custom\n", encoding="utf-8")
     (trays / "10-to-pay.yaml").write_text(
         (DEFAULTS_DIR / "trays" / "10-to-pay.yaml").read_text(encoding="utf-8"), encoding="utf-8"
-    )  # to-action and to-read were removed on purpose
+    )  # to-action was removed on purpose
     paths.ensure()
     assert (trays / "40-follow-up.yaml").exists()
     assert (trays / "50-renew.yaml").exists()
     assert not (trays / "20-to-action.yaml").exists()
-    assert not (trays / "30-to-read.yaml").exists()
     # removed again: it is not offered a second time
     (trays / "40-follow-up.yaml").unlink()
     (trays / "50-renew.yaml").unlink()

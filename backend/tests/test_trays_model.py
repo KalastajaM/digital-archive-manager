@@ -18,8 +18,8 @@ def tray(**overrides) -> TrayDef:
 def test_defaults_load_without_errors():
     trays, errors = load_trays(DEFAULTS)
     assert errors == []
-    assert [t.id for t in trays] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
-    pay, action, read, follow, _renew = trays
+    assert [t.id for t in trays] == ["to-pay", "to-action", "follow-up", "renew"]
+    pay, action, follow, _renew = trays
     assert pay.fields["amount"].prefill == "total"
     assert pay.fields["due_date"].required
     assert pay.fields["iban"].copyable and pay.fields["reference"].copyable
@@ -38,9 +38,6 @@ def test_defaults_load_without_errors():
     assert action.fields["action_date"].required
     assert [r.days_before for r in action.reminders] == [1, 0]
     assert action.done.label == "Done"
-    assert read.fields == {} and read.date_field is None
-    assert read.nudge_after_days == 30
-    assert read.done.label == "Read"
     assert follow.date_field == "check_by" and not follow.fields["check_by"].required
     assert follow.fields["waiting_for"].type == "text"
     assert follow.done.label == "Done" and follow.done.fields == {}
@@ -261,7 +258,7 @@ def write_tray(tmp_path, body: str) -> tuple[list[TrayDef], list]:
 def test_shipped_trays_include_renew():
     trays, errors = load_trays(DEFAULTS)
     assert errors == []
-    assert [t.id for t in trays] == ["to-pay", "to-action", "to-read", "follow-up", "renew"]
+    assert [t.id for t in trays] == ["to-pay", "to-action", "follow-up", "renew"]
     renew = next(t for t in trays if t.id == "renew")
     assert renew.renew.label == "Renewed"
     assert renew.fields["kind"].options[0] == "Passport"
