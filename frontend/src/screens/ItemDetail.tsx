@@ -398,7 +398,7 @@ export function ReopenButton({ item }: { item: Item }) {
 }
 
 /** What the item panel leads with: a bill (its tray has an IBAN field), a dated item
- * (the tray has a date field) or one that waits (To read). */
+ * (the tray has a date field) or one that waits (an undated tray). */
 export type ItemKind = "bill" | "dated" | "waiting";
 
 export function itemKind(tray: TrayDef | undefined): ItemKind {

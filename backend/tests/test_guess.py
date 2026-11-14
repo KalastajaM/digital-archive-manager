@@ -12,7 +12,7 @@ from dam.rules.fields import DetectedFields
 from dam.rules.guess import guess_tray
 from dam.rules.model import Rule
 
-TRAYS = ("to-pay", "to-action", "to-read")
+TRAYS = ("to-pay", "to-action", "follow-up")
 DUE = date(2026, 11, 15)
 TOTAL = Decimal("84.20")
 IBAN = "FI2112345600000785"
@@ -51,13 +51,13 @@ def test_heuristic_false_cases(fields):
 
 def test_heuristic_needs_a_to_pay_tray():
     bill = found(due_date=DUE, total=TOTAL, iban=IBAN)
-    assert guess_tray(bill, None, ("to-action", "to-read")) is None
+    assert guess_tray(bill, None, ("to-action", "follow-up")) is None
 
 
 def test_rule_beats_heuristic():
     bill = found(due_date=DUE, total=TOTAL, iban=IBAN)
     assert guess_tray(bill, "to-action", TRAYS) == "to-action"
-    assert guess_tray(found(), "to-read", TRAYS) == "to-read"
+    assert guess_tray(found(), "follow-up", TRAYS) == "follow-up"
 
 
 def test_unknown_rule_tray_falls_back():

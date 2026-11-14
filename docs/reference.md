@@ -862,14 +862,13 @@ the page. An invalid file is skipped (and logged), as if no custom sheet were sa
 
 ## Tray files
 
-A tray is a YAML file (one tray per file) in `config/trays/`. Five are seeded from
+A tray is a YAML file (one tray per file) in `config/trays/`. Four are seeded from
 `defaults/trays/`:
 
 | Tray | Fields | Reminders |
 | --- | --- | --- |
 | **To pay** | `payee` (prefilled from a rule's `then.payee`), `due_date` (required), `amount`, `iban`, `reference`, prefilled from the scan; copy buttons on amount, IBAN and reference; "Mark paid" asks for `paid_on` (default today) | 3 days before, on the day, and once when overdue; Today shows the open total |
 | **To action** | `action_date` (required) | 1 day before and on the day |
-| **To read** | none | one nudge when an item has waited 30 days |
 | **Follow up** | `check_by` (optional date), `waiting_for`; "Done" asks for nothing more | on the check date and once when it is overdue |
 | **Renew** | `expires` (required date), `kind` (a choice), `lead_days` (optional); "Renewed…" asks for the new date and an optional new file; the done label is "No longer needed" | the lead time before `expires` (by kind), on the day, and once when overdue |
 

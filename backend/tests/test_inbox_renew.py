@@ -195,8 +195,8 @@ def test_no_ops_gets_its_own_batch(app, item, fake_archive):
 
 
 def test_renews_skips_the_tray_step(app, item, fake_archive):
-    out = app.inbox.file_it([req(item, tray="to-read")])
-    assert out.items == [] and app.trays.list("to-read") == []
+    out = app.inbox.file_it([req(item, tray="follow-up")])
+    assert out.items == [] and app.trays.list("follow-up") == []
     assert app.trays.get(item.id).files == ["new", "terms"]
 
 

@@ -65,7 +65,7 @@ def kinds(svc, item_id) -> list[str]:
 
 
 def test_add_file_at_a_position_puts_it_back(engine, svc):
-    item = svc.create("to-read", ["d1", "d2", "d3"], {}, "x")
+    item = svc.create("follow-up", ["d1", "d2", "d3"], {}, "x")
     svc.remove_file(item.id, "d2")
     assert svc.add_file(item.id, "d2", 1).files == ["d1", "d2", "d3"]
     svc.remove_file(item.id, "d1")
@@ -78,8 +78,8 @@ def test_add_file_at_a_position_puts_it_back(engine, svc):
 
 def test_merge_adds_files_note_and_checklist_and_removes_the_source(engine, svc, notes_svc):
     add_file(engine, "d2", "second.pdf")
-    target = svc.create("to-read", ["d1", "d2"], {}, "Target")
-    source = svc.create("to-read", ["d2", "d3", "d4"], {}, "Source")
+    target = svc.create("follow-up", ["d1", "d2"], {}, "Target")
+    source = svc.create("follow-up", ["d2", "d3", "d4"], {}, "Source")
     notes_svc.set("item", str(target.id), "target note")
     notes_svc.set("item", str(source.id), "source note")
     notes_svc.add_check("item", str(target.id), "t1")
@@ -90,7 +90,7 @@ def test_merge_adds_files_note_and_checklist_and_removes_the_source(engine, svc,
 
     merged = svc.merge(target.id, source.id)
 
-    assert merged.id == target.id and merged.title == "Target" and merged.tray_id == "to-read"
+    assert merged.id == target.id and merged.title == "Target" and merged.tray_id == "follow-up"
     assert merged.files == ["d1", "d2", "d3", "d4"]  # in order, d2 once
     assert notes_svc.get("item", str(target.id)) == "target note\n\n--- Source ---\nsource note"
     assert [(c.text, c.done, c.position) for c in notes_svc.checklist("item", str(target.id))] == [
@@ -109,8 +109,8 @@ def test_merge_adds_files_note_and_checklist_and_removes_the_source(engine, svc,
 
 
 def test_merge_records_a_history_event_without_the_snapshot(engine, svc, notes_svc):
-    target = svc.create("to-read", ["d1"], {}, "Target")
-    source = svc.create("to-read", ["d1", "d2"], {}, "Source")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
+    source = svc.create("follow-up", ["d1", "d2"], {}, "Source")
     notes_svc.set("item", str(source.id), "n")
     notes_svc.add_check("item", str(source.id), "s1")
     svc.merge(target.id, source.id)
@@ -125,8 +125,8 @@ def test_merge_records_a_history_event_without_the_snapshot(engine, svc, notes_s
 def test_merge_into_a_target_without_a_note_starts_the_note_with_the_separator(
     engine, svc, notes_svc
 ):
-    target = svc.create("to-read", ["d1"], {}, "Target")
-    source = svc.create("to-read", ["d2"], {}, "Source")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
+    source = svc.create("follow-up", ["d2"], {}, "Source")
     notes_svc.set("item", str(source.id), "hello")
     svc.merge(target.id, source.id)
     assert notes_svc.get("item", str(target.id)) == "--- Source ---\nhello"
@@ -134,7 +134,7 @@ def test_merge_into_a_target_without_a_note_starts_the_note_with_the_separator(
 
 def test_merge_keeps_the_targets_own_fields_tray_and_date(engine, svc):
     target = svc.create("to-pay", ["d1"], {"amount": "10.00", "due_date": "2026-11-01"}, "Target")
-    source = svc.create("to-read", ["d2"], {}, "Source")
+    source = svc.create("follow-up", ["d2"], {}, "Source")
     merged = svc.merge(target.id, source.id)
     assert (merged.tray_id, merged.fields, merged.date) == (
         target.tray_id,
@@ -144,8 +144,8 @@ def test_merge_keeps_the_targets_own_fields_tray_and_date(engine, svc):
 
 
 def test_merge_refuses_itself_unknown_ids_done_items_and_a_note_too_long(engine, svc, notes_svc):
-    a = svc.create("to-read", ["d1"], {}, "A")
-    b = svc.create("to-read", ["d2"], {}, "B")
+    a = svc.create("follow-up", ["d1"], {}, "A")
+    b = svc.create("follow-up", ["d2"], {}, "B")
     with pytest.raises(InvalidRequest):
         svc.merge(a.id, a.id)
     with pytest.raises(NotFound):
@@ -157,8 +157,8 @@ def test_merge_refuses_itself_unknown_ids_done_items_and_a_note_too_long(engine,
         svc.merge(a.id, b.id)
     with pytest.raises(InvalidRequest):
         svc.merge(b.id, a.id)
-    c = svc.create("to-read", ["d3"], {}, "C")
-    d = svc.create("to-read", ["d4"], {}, "D")
+    c = svc.create("follow-up", ["d3"], {}, "C")
+    d = svc.create("follow-up", ["d4"], {}, "D")
     notes_svc.set("item", str(c.id), "x" * (NOTE_MAX - 5))
     notes_svc.set("item", str(d.id), "y" * 100)
     with pytest.raises(InvalidRequest):
@@ -170,7 +170,7 @@ def test_merge_refuses_itself_unknown_ids_done_items_and_a_note_too_long(engine,
 
 
 def test_undo_merge_restores_both_items_as_they_were(engine, svc, notes_svc):
-    target = svc.create("to-read", ["d1"], {}, "Target")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
     source = svc.create("to-pay", ["d1", "d2"], {"amount": "5.00"}, "Source")
     svc.add_file(source.id, "d3", 0)
     notes_svc.set("item", str(target.id), "keep")
@@ -212,8 +212,8 @@ def test_undo_merge_restores_both_items_as_they_were(engine, svc, notes_svc):
 
 
 def test_undo_merge_removes_a_note_the_target_did_not_have(engine, svc, notes_svc):
-    target = svc.create("to-read", ["d1"], {}, "Target")
-    source = svc.create("to-read", ["d2"], {}, "Source")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
+    source = svc.create("follow-up", ["d2"], {}, "Source")
     notes_svc.set("item", str(source.id), "src")
     svc.merge(target.id, source.id)
     svc.undo_merge(target.id)
@@ -221,8 +221,8 @@ def test_undo_merge_removes_a_note_the_target_did_not_have(engine, svc, notes_sv
 
 
 def test_undo_merge_conflicts_once_the_target_changed(engine, svc, notes_svc):
-    target = svc.create("to-read", ["d1"], {}, "Target")
-    source = svc.create("to-read", ["d2"], {}, "Source")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
+    source = svc.create("follow-up", ["d2"], {}, "Source")
     notes_svc.set("item", str(source.id), "src")
     svc.merge(target.id, source.id)
     notes_svc.set("item", str(target.id), "edited since")
@@ -237,7 +237,7 @@ def test_undo_merge_conflicts_once_the_target_changed(engine, svc, notes_svc):
 
 
 def test_undo_merge_without_a_merge_conflicts(svc):
-    a = svc.create("to-read", ["d1"], {}, "A")
+    a = svc.create("follow-up", ["d1"], {}, "A")
     with pytest.raises(Conflict):
         svc.undo_merge(a.id)
     with pytest.raises(NotFound):
@@ -245,13 +245,13 @@ def test_undo_merge_without_a_merge_conflicts(svc):
 
 
 def test_undo_merge_conflicts_when_the_source_id_was_taken(engine, svc):
-    target = svc.create("to-read", ["d1"], {}, "Target")
-    source = svc.create("to-read", ["d2"], {}, "Source")
+    target = svc.create("follow-up", ["d1"], {}, "Target")
+    source = svc.create("follow-up", ["d2"], {}, "Source")
     svc.merge(target.id, source.id)
     with write_tx(engine) as conn:
         conn.execute(
             insert(items).values(
-                id=source.id, tray_id="to-read", title="x", fields={}, state="open", created=1.0
+                id=source.id, tray_id="follow-up", title="x", fields={}, state="open", created=1.0
             )
         )
     with pytest.raises(Conflict):
@@ -272,8 +272,8 @@ def post(client, url, body=None):
 
 
 def test_merge_api(client, app):
-    a = app.trays.create("to-read", ["d1"], {}, "A")
-    b = app.trays.create("to-read", ["d2"], {}, "B")
+    a = app.trays.create("follow-up", ["d1"], {}, "A")
+    b = app.trays.create("follow-up", ["d2"], {}, "B")
     r = post(client, f"/api/items/{a.id}/merge", {"item_id": b.id})
     assert r.status_code == 200, r.text
     assert r.json()["files"] == ["d1", "d2"]
@@ -288,7 +288,7 @@ def test_merge_api(client, app):
 
 
 def test_merge_api_errors(client, app):
-    a = app.trays.create("to-read", ["d1"], {}, "A")
+    a = app.trays.create("follow-up", ["d1"], {}, "A")
     assert post(client, f"/api/items/{a.id}/merge", {"item_id": a.id}).status_code == 400
     assert post(client, f"/api/items/{a.id}/merge", {"item_id": 999}).status_code == 404
     assert post(client, "/api/items/999/merge", {"item_id": a.id}).status_code == 404

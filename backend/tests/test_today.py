@@ -54,6 +54,7 @@ def test_attention_note_excerpt(app, fake_archive):
 
 
 def test_attention_ignores_undated_items_of_trays_without_a_date(app, fake_archive):
+    add_nudge_tray(app)
     fake_archive.add(f"{BANKS}/r.pdf", drive_id="r1")
     app.scan()
     app.trays.create("to-read", ["r1"], {}, title=None)
@@ -87,7 +88,17 @@ def test_file_state_missing_and_to_delete(app, fake_archive):
     assert states == {gone.id: "missing", trashed.id: "to_delete"}
 
 
+def add_nudge_tray(app):
+    """A tray that nudges after 30 days (none ships by default any more)."""
+    (app.trays_dir / "30-to-read.yaml").write_text(
+        "id: to-read\nname: To read\norder: 3\nitem_title: '{name}'\nnudge_after_days: 30\n",
+        encoding="utf-8",
+    )
+    app.reload_rules()
+
+
 def test_overview_counts_sums_and_waiting(app, fake_archive):
+    add_nudge_tray(app)
     fake_archive.add(f"{INBOX}/new.pdf", drive_id="in-1")
     bill(app, fake_archive, "b1", TODAY - timedelta(days=1), amount="84,20")
     bill(app, fake_archive, "b2", TODAY + timedelta(days=9), amount="10.00")
@@ -181,6 +192,7 @@ def test_level_and_file_info_per_item(app, fake_archive):
 
 
 def test_open_items_per_tray_by_date_undated_last_capped(app, fake_archive):
+    add_nudge_tray(app)
     later = bill(app, fake_archive, "o1", TODAY + timedelta(days=20), amount="80.00")
     undated = bill(app, fake_archive, "o2", None)
     overdue = bill(app, fake_archive, "o3", TODAY - timedelta(days=4))
@@ -208,7 +220,7 @@ def test_open_items_reads_no_files(app, fake_archive, monkeypatch):
     bill(app, fake_archive, "f1", TODAY)
     monkeypatch.setattr(app.today, "file_info", lambda item: (_ for _ in ()).throw(AssertionError))
     monkeypatch.setattr(app.today.repo, "get", lambda *a: (_ for _ in ()).throw(AssertionError))
-    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0, 0, 0]
+    assert [len(t.items) for t in app.today.open_items()] == [1, 0, 0, 0]
 
 
 def test_overview_counts_collection_members_still_in_the_inbox(app, fake_archive):

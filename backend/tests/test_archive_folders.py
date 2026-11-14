@@ -283,7 +283,7 @@ def test_forget_leaves_no_row_that_names_a_forgotten_file(app_paths, extra_folde
             insert(t.collections).values(name="Receipts", name_fold="receipts", created=1.0)
         ).inserted_primary_key[0]
         iid = conn.execute(
-            insert(t.items).values(tray_id="to-read", title="Letter", fields={}, created=1.0)
+            insert(t.items).values(tray_id="follow-up", title="Letter", fields={}, created=1.0)
         ).inserted_primary_key[0]
         for drive_id in ("x1", "x2", kept.drive_id):
             conn.execute(

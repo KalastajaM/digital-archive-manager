@@ -388,7 +388,7 @@ def test_tray_files_carry_the_folder_with_one_look_per_response(
     extra_folder.add("2009/letter.pdf", drive_id="old-1")
     fake_archive.add(f"{INBOX}/new.pdf", drive_id="new-1")
     xapp.scan()
-    r = post(xclient, "/api/items/quick", {"tray": "to-read", "drive_ids": ["old-1", "new-1"]})
+    r = post(xclient, "/api/items/quick", {"tray": "follow-up", "drive_ids": ["old-1", "new-1"]})
     assert r.status_code == 200, r.text
     old_item, new_item = (i["id"] for i in r.json()["created"])
     shutil.move(extra_folder.root, tmp_path / "unplugged")
@@ -401,7 +401,7 @@ def test_tray_files_carry_the_folder_with_one_look_per_response(
 
     monkeypatch.setattr(xapp.paths, "disconnected_labels", counted)
 
-    rows = xclient.get("/api/trays/to-read/items").json()
+    rows = xclient.get("/api/trays/follow-up/items").json()
     assert len(looks) == 1
     first = {row["id"]: row["first_file"] for row in rows}
     assert (first[old_item]["folder"], first[old_item]["connected"]) == ("Old years", False)
