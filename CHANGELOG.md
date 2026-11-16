@@ -51,6 +51,14 @@ All notable changes are listed here. The format follows
   only a picture area drew them on every file in the Inbox. Its score and best place are
   still in the rule's test and in **Test a document**.
 
+### Removed
+
+- The **To read** tray and its `R` filing code no longer come with dam: it overlapped with
+  **Follow up**, whose check-by date is optional. New installs get four trays and four codes.
+  An existing install keeps its own `30-to-read.yaml` and `R` code until you delete them (in
+  `config/trays/` and Settings → Filing codes); items in the tray stay where they are. The
+  `nudge_after_days` tray setting still works for a tray of your own.
+
 ## [1.0.0] - 2026-11-01
 
 The 1.0 release. In short:

@@ -93,7 +93,7 @@ def test_today(client, app, files, freeze_today):
     by_tray = {t["tray_id"]: t["items"] for t in body["open_items"]}
     assert [i["id"] for i in by_tray["to-pay"]] == [item["id"]]
     assert by_tray["to-pay"][0]["fields"]["amount"] == "84.20"
-    assert by_tray["to-read"] == []
+    assert by_tray["follow-up"] == []
 
 
 def test_today_reports_a_failing_ongoing_sync(client, app, monkeypatch):
@@ -117,7 +117,6 @@ def test_trays_lists_defs_with_copy_key(client):
     assert [t["id"] for t in body["trays"]] == [
         "to-pay",
         "to-action",
-        "to-read",
         "follow-up",
         "renew",
     ]

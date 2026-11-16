@@ -27,7 +27,7 @@ from dam.reminders.notify import (
     plain,
     run_reminders,
 )
-from dam.trays.model import load_trays
+from dam.trays.model import TrayDef, load_trays
 from dam.trays.service import TrayService
 
 HKI = ZoneInfo("Europe/Helsinki")
@@ -46,7 +46,8 @@ def ts(when: datetime) -> float:
 def trays():
     defs, errors = load_trays(DEFAULTS)
     assert errors == []
-    return defs
+    # no undated tray with a nudge ships by default; the nudge tests add their own
+    return [*defs, TrayDef(id="to-read", name="To read", order=3, nudge_after_days=30)]
 
 
 @pytest.fixture
@@ -385,6 +386,10 @@ def prod_now(utc: datetime) -> datetime:
     ],
 )
 def test_nudge_fires_once_across_dst_with_fixed_offset_now(app, helsinki, created, start):
+    (app.trays_dir / "30-to-read.yaml").write_text(
+        "id: to-read\nname: To read\norder: 3\nnudge_after_days: 30\n", encoding="utf-8"
+    )
+    app.reload_rules()
     item = app.trays.create("to-read", ["d1"], {}, "Article")
     created_at(app.engine, item.id, created)
     fake = FakeNotifier()

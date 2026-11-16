@@ -245,7 +245,7 @@ to what it counts; then two columns.
 - On the left, a **To pay** table: each bill with its payee, amount and due tag (red
   overdue, orange within 3 days, grey later), **Pay** to open Pay mode on it and **Paid**
   to mark it paid; the overdue bill opens up with its copy buttons and note. Below it
-  your other trays (**To action**, **To read** and the rest) as short lists with **Show
+  your other trays (**To action**, **Follow up** and the rest) as short lists with **Show
   all**.
 - On the right, the **Inbox** summary: how many files, the age of the oldest document, how
   many the rules recognised, a bar for this week, last week and older, and **Found in the
@@ -407,13 +407,12 @@ A file gets its code from where you save it (an [inbox folder](#inbox-folders)),
 seen it: a coded file waits in the Inbox with the code's values filled in, and you file
 it from the form or together with the others through [File N marked](#file-n-marked).
 
-dam comes with five codes, which you can change or remove in **Settings → Filing codes**:
+dam comes with four codes, which you can change or remove in **Settings → Filing codes**:
 
 | Code | Label | Does | Inbox folder |
 | --- | --- | --- | --- |
 | `A` | To action | puts it in the To action tray | `To action` |
 | `P` | To pay | puts it in the To pay tray | `To pay` |
-| `R` | To read | puts it in the To read tray | `To read` |
 | `F` | Follow-up | puts it in the Follow up tray | `Follow-up` |
 | `D` | File as suggested | files it where dam suggests, in no tray | `File as suggested` |
 
@@ -477,7 +476,7 @@ Other subfolders of the inbox are not inbox folders, and the files in them are n
 the Inbox. Settings → Filing codes names them above the codes ("belongs to no code"), so
 a renamed folder is easy to spot.
 
-If your inbox already has subfolders named "To pay", "To action", "To read",
+If your inbox already has subfolders named "To pay", "To action",
 "Follow-up" or "File as suggested", they become inbox folders with this version, and the
 files directly in them now show in the Inbox.
 
@@ -998,13 +997,12 @@ and photos at 30 a minute)".
 ## Trays
 
 A tray is a to-do list of documents: once a scanned paper is filed into a tray, the paper
-can go. Five trays come with dam:
+can go. Four trays come with dam:
 
 | Tray | For | Reminders |
 | --- | --- | --- |
 | **To pay** | bills: payee, due date, amount, IBAN and reference, with copy buttons | 3 days before, on the day, and once when overdue |
 | **To action** | things to do by a date | 1 day before and on the day |
-| **To read** | reading with no date | one nudge after 30 days |
 | **Follow up** | things you wait on from others (a delivery, a reply, a refund), with an optional check-by date | on the check date and once when overdue |
 | **Renew** | things that expire: a passport, an ID card, a driving licence, insurance, a warranty, a contract; an expiry date and a kind | the kind's lead time before the date, on the day, and once when overdue |
 
@@ -2075,7 +2073,7 @@ drag a row by its grip, or press ⌥↑ / ⌥↓, to reorder.
 ## Reminders
 
 dam reminds you of tray items by their date: a bill a few days before it is due, on the
-day and once when overdue; an undated item to read after 30 days. A Renew item is
+day and once when overdue. A Renew item is
 reminded its lead time before it expires (180 days for a passport; see
 [Renewing](#renewing)). Each reminder is sent
 once and never for done items. If several are already past when an item is created (an

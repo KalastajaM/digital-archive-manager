@@ -140,7 +140,7 @@ def test_explicit_title_and_date_template(engine, config):
 
 def test_name_without_date_prefix_or_extension(engine, svc):
     add_file(engine, "d1", "Lease_contract.v2.PDF")
-    assert svc.create("to-read", ["d1"], {}, None).title == "Lease contract.v2"
+    assert svc.create("follow-up", ["d1"], {}, None).title == "Lease contract.v2"
 
 
 def test_done_sets_paid_on_today_and_reopen_undoes(engine, svc, freeze_today):
@@ -222,18 +222,18 @@ def test_list_ordering(svc):
 
 
 def test_item_of_removed_tray_stays_listable(engine, svc, config):
-    item = svc.create("to-read", ["d1"], {}, "Old")
-    config["trays"] = [t for t in config["trays"] if t.id != "to-read"]
+    item = svc.create("follow-up", ["d1"], {}, "Old")
+    config["trays"] = [t for t in config["trays"] if t.id != "follow-up"]
     listed = svc.list()
     assert [i.id for i in listed] == [item.id]
     assert listed[0].tray_removed and listed[0].tray_name == REMOVED_TRAY_NAME
-    assert [i.id for i in svc.list("to-read")] == [item.id]
+    assert [i.id for i in svc.list("follow-up")] == [item.id]
     assert svc.update(item.id, None, "Older").title == "Older"
     with pytest.raises(InvalidRequest, match="removed"):
         svc.update(item.id, {"x": "1"}, None)
     assert svc.done(item.id, {}).state == "done"
     with pytest.raises(NotFound):
-        svc.create("to-read", ["d1"], {}, None)
+        svc.create("follow-up", ["d1"], {}, None)
 
 
 def test_file_whose_row_is_missing_keeps_item_and_files(engine, svc):
@@ -252,7 +252,7 @@ def test_files_add_remove_and_for_file(engine, svc):
     assert item.files == ["d1"]
     assert svc.add_file(item.id, "d2").files == ["d1", "d2"]
     assert svc.add_file(item.id, "d2").files == ["d1", "d2"]  # idempotent
-    other = svc.create("to-read", ["d2"], {}, "y")
+    other = svc.create("follow-up", ["d2"], {}, "y")
     assert [i.id for i in svc.for_file("d2")] == [item.id, other.id]
     assert svc.remove_file(item.id, "d1").files == ["d2"]
     with pytest.raises(NotFound):
@@ -266,8 +266,8 @@ def test_files_add_remove_and_for_file(engine, svc):
 
 def test_remove_created_by(engine, svc):
     a = svc.create("to-pay", ["d1"], {}, "a", batch_id="b1")
-    b = svc.create("to-read", ["d1", "d2"], {}, "b", batch_id="b1")
-    keep = svc.create("to-read", ["d1"], {}, "keep", batch_id="b2")
+    b = svc.create("follow-up", ["d1", "d2"], {}, "b", batch_id="b1")
+    keep = svc.create("follow-up", ["d1"], {}, "keep", batch_id="b2")
     assert a.created_by_batch == "b1"
     with engine.begin() as conn:
         for item_id in (a.id, keep.id):
@@ -381,7 +381,7 @@ def test_date_recomputed_from_current_config(engine, config, svc):
 
 
 def test_done_and_reopen_are_conditional(engine, svc):
-    item = svc.create("to-read", ["d1"], {}, "x")
+    item = svc.create("follow-up", ["d1"], {}, "x")
     with engine.begin() as conn:
         conn.execute(update(items).values(state="done"))
     with pytest.raises(InvalidRequest):
@@ -394,8 +394,8 @@ def test_done_and_reopen_are_conditional(engine, svc):
 
 def test_drive_id_validation(svc):
     with pytest.raises(InvalidRequest):
-        svc.create("to-read", "d1", {}, "x")
-    item = svc.create("to-read", ["d1"], {}, "x")
+        svc.create("follow-up", "d1", {}, "x")
+    item = svc.create("follow-up", ["d1"], {}, "x")
     for bad in ("", None, 5):
         with pytest.raises(InvalidRequest):
             svc.add_file(item.id, bad)

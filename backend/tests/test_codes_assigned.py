@@ -38,8 +38,8 @@ def test_assigned_code_fills_suggestion_and_batch(app, fake_archive):
 def test_assigning_another_replaces_it_and_none_removes_it(app, fake_archive):
     add_in(app, fake_archive, f"{INBOX}/bill.pdf", "b1", NORTHPOWER_BILL)
     assign_code(app, ["b1"], "P")
-    assign_code(app, ["b1"], "R")
-    assert hits(app.inbox.suggestion("b1")) == [("R", "assigned", False)]
+    assign_code(app, ["b1"], "F")
+    assert hits(app.inbox.suggestion("b1")) == [("F", "assigned", False)]
     assign_code(app, ["b1"], None)
     assert app.inbox.suggestion("b1").codes == []
 
@@ -61,10 +61,10 @@ def test_assigned_code_overrides_sticker_but_keeps_its_tick_boxes(app, fake_arch
     add_rule(app, folder=BANKS)
     add_in(app, fake_archive, f"{INBOX}/bill.pdf", "b1", NORTHPOWER_BILL)
     stick(app, "b1", QrRead("P", 1, "ticked", "empty"))
-    assign_code(app, ["b1"], "R")
+    assign_code(app, ["b1"], "F")
     found = app.inbox.suggestion("b1")
-    assert hits(found) == [("R", "assigned", False), ("P", "qr", True)]
-    assert found.tray == "to-read"
+    assert hits(found) == [("F", "assigned", False), ("P", "qr", True)]
+    assert found.tray == "follow-up"
     assert found.star is True and found.important is False
 
 
@@ -84,10 +84,10 @@ def test_removing_it_brings_the_other_codes_back(app, fake_archive):
 def test_code_no_longer_in_the_table_sets_nothing_and_overrides_nothing(app, fake_archive):
     add_rule(app, folder=BANKS)
     add_in(app, fake_archive, f"{INBOX}/To pay/bill.pdf", "b1", NORTHPOWER_BILL)
-    assign_code(app, ["b1"], "R")
-    assert app.save_codes([c for c in app.codes if c.code != "R"]) == []
+    assign_code(app, ["b1"], "F")
+    assert app.save_codes([c for c in app.codes if c.code != "F"]) == []
     found = app.inbox.suggestion("b1")
-    assert hits(found) == [("R", "assigned", False), ("P", "folder", False)]
+    assert hits(found) == [("F", "assigned", False), ("P", "folder", False)]
     assert found.tray == "to-pay"
     [row] = marked_rows(app)
     assert [h.code for h in row.codes] == ["P"]
@@ -110,7 +110,7 @@ def test_refusals_change_nothing(app, fake_archive):
 def test_kept_after_filing_and_back_with_undo(app, fake_archive):
     add_rule(app, folder=BANKS)
     add_in(app, fake_archive, f"{INBOX}/bill.pdf", "b1", NORTHPOWER_BILL)
-    assign_code(app, ["b1"], "R")
+    assign_code(app, ["b1"], "F")
     [row] = marked_rows(app)
     out = file_rows(app, [row])
     rec = app.repo.get("b1")
@@ -118,7 +118,7 @@ def test_kept_after_filing_and_back_with_undo(app, fake_archive):
     # outside the inbox it routes nothing
     assert app.inbox.suggestion("b1").codes == []
     app.activity.undo(out["batch_id"])
-    assert hits(app.inbox.suggestion("b1")) == [("R", "assigned", False)]
+    assert hits(app.inbox.suggestion("b1")) == [("F", "assigned", False)]
 
 
 def test_api_assigns_and_refuses(app, fake_archive):

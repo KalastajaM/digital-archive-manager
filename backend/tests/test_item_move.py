@@ -76,8 +76,8 @@ def test_move_refusals(client, app, scans):
     ]
     assert post(client, f"/api/items/{a['id']}/move", {"tray": "nope"}).status_code == 404
     # the item's file already has an open item in the target tray
-    app.trays.create("to-read", ["s1"], {}, None)
-    assert post(client, f"/api/items/{a['id']}/move", {"tray": "to-read"}).status_code == 409
+    app.trays.create("follow-up", ["s1"], {}, None)
+    assert post(client, f"/api/items/{a['id']}/move", {"tray": "follow-up"}).status_code == 409
     # a done item stays where it is
     app.trays.done(a["id"], {})
     assert post(client, f"/api/items/{a['id']}/move", {"tray": "to-action"}).status_code == 400
@@ -88,7 +88,7 @@ def test_put_in_a_tray_when_the_item_is_done_creates_a_new_open_item(client, app
         0
     ]
     app.trays.done(a["id"], {})
-    r = post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["s1"]}).json()
+    r = post(client, "/api/items/quick", {"tray": "follow-up", "drive_ids": ["s1"]}).json()
     assert len(r["created"]) == 1 and r["moved"] == []
     assert app.trays.get(a["id"]).tray_id == "to-pay"  # the done item and its history stay
     assert len(app.trays.list("to-pay", "done")) == 1
@@ -98,16 +98,16 @@ def test_undo_move(client, app, scans):
     a = post(client, "/api/items/quick", {"tray": "to-pay", "drive_ids": ["s1"]}).json()["created"][
         0
     ]
-    post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["s1"]})
+    post(client, "/api/items/quick", {"tray": "follow-up", "drive_ids": ["s1"]})
     r = post(client, f"/api/items/{a['id']}/undo-move")
     assert r.status_code == 200 and r.json()["tray_id"] == "to-pay"
     assert [i.id for i in app.trays.list("to-pay")] == [a["id"]]
-    assert app.trays.list("to-read") == []
+    assert app.trays.list("follow-up") == []
     last = app.trays.history(a["id"])[-1]
     assert last.kind == "moved" and last.data["undo"] is True
     # nothing left to take back; and an item edited after the move cannot be taken back
     assert post(client, f"/api/items/{a['id']}/undo-move").status_code == 409
-    post(client, f"/api/items/{a['id']}/move", {"tray": "to-read"})
+    post(client, f"/api/items/{a['id']}/move", {"tray": "follow-up"})
     app.trays.update(a["id"], None, "Renamed")
     assert post(client, f"/api/items/{a['id']}/undo-move").status_code == 409
 

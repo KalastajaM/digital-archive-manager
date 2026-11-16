@@ -223,8 +223,8 @@ def test_changes_to_a_file_in_to_delete_are_refused_and_nothing_is_lost(client, 
     who = {"drive_ids": ["id-a"], "sender": "Kela"}
     refused(client.put("/api/assignments", json=who, headers=LOCAL_ORIGIN))
     refused(post(client, f"/api/collections/{col.id}/members", {"drive_ids": ["id-a"]}))
-    refused(post(client, "/api/items/quick", {"tray": "to-read", "drive_ids": ["id-a"]}))
-    refused(post(client, "/api/items", {"tray": "to-read", "drive_ids": ["id-a"]}))
+    refused(post(client, "/api/items/quick", {"tray": "follow-up", "drive_ids": ["id-a"]}))
+    refused(post(client, "/api/items", {"tray": "follow-up", "drive_ids": ["id-a"]}))
     # a batch with one such file is refused whole
     refused(post(client, "/api/marks/star", {"drive_ids": ["id-b", "id-a"]}))
 

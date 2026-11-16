@@ -553,13 +553,13 @@ def test_set_email_password_stores_in_keychain(run, app_paths, monkeypatch):
 def test_trays_command(run, app, a_bill, fake_archive):
     fake_archive.add(f"{BANKS}/r.pdf", drive_id="r-1")
     app.scan()
-    app.trays.create("to-read", ["r-1"], {}, title=None)
+    app.trays.create("follow-up", ["r-1"], {}, title=None)
     r = run("trays")
     assert r.exit_code == 0, r.output
     assert "To pay" in r.stdout and "Northpower bill" in r.stdout and "2026-11-03" in r.stdout
-    assert "To read" in r.stdout and "r" in r.stdout
-    r = run("trays", "--tray", "to-read")
-    assert "Northpower bill" not in r.stdout and "To read" in r.stdout
+    assert "Follow up" in r.stdout and "r" in r.stdout
+    r = run("trays", "--tray", "follow-up")
+    assert "Northpower bill" not in r.stdout and "Follow up" in r.stdout
     assert "Northpower bill" not in run("trays", "--done").stdout
     app.trays.done(a_bill.id, {})
     assert "Northpower bill" in run("trays", "--done").stdout

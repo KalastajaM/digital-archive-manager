@@ -183,7 +183,7 @@ const LANES: { tray: string; dots: number[] }[] = [
 function Reminders() {
   return (
     <Figure title="When the trays remind you" note="Each reminder is sent once, never for done items.">
-      <svg viewBox="0 0 940 240" role="img" aria-label="Reminders: To pay 3 days before the due date, on the day and once overdue; To action 1 day before and on the day; Follow up on the check date and once overdue; To read one nudge 30 days after filing.">
+      <svg viewBox="0 0 940 240" role="img" aria-label="Reminders: To pay 3 days before the due date, on the day and once overdue; To action 1 day before and on the day; Follow up on the check date and once overdue.">
         {Object.values(TICKS).map((x) => (
           <g key={x}>
             <path d={`M${x} 18V196`} className="hdw-faint hdw-dash" />
@@ -195,7 +195,7 @@ function Reminders() {
         <Label x={TICKS.before1} y={222} mono>−1 day</Label>
         <Label x={TICKS.due} y={222} mono tone="ink">due / check date</Label>
         <Label x={TICKS.overdue} y={222} mono>overdue</Label>
-        {[...LANES, { tray: "To read", dots: [870] }].map((lane, i) => {
+        {LANES.map((lane, i) => {
           const y = 40 + i * 42;
           return (
             <g key={lane.tray}>
@@ -205,7 +205,6 @@ function Reminders() {
             </g>
           );
         })}
-        <Label x={856} y={160} anchor="end">30 days after filing</Label>
       </svg>
     </Figure>
   );
