@@ -300,6 +300,7 @@ dialog.sheet[open] { animation: sheet-in var(--motion) var(--ease); }
 }
 .sheet-body > :first-child { margin-top: 0; }
 .sheet-body > :last-child { margin-bottom: 0; }
+.sheet-body code { overflow-wrap: anywhere; }
 .sheet-footer {
   flex: none;
   display: flex;

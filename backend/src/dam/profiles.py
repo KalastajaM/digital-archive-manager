@@ -279,16 +279,25 @@ class ProfileStore:
                 return color
         return PALETTE[1][1]
 
-    def add(self, name: str, color: str | None = None) -> Profile:
+    def add(
+        self,
+        name: str,
+        color: str | None = None,
+        data_dir: Path | None = None,
+        seed: bool = True,
+    ) -> Profile:
         """Register a new profile and make its (empty, seeded) data folder. It is not
-        made active."""
+        made active. ``data_dir``: the owner's own folder for it instead of one under
+        ``archives/``; ``seed`` False leaves a folder that already holds data untouched."""
         name = clean_name(name)
         profiles = self.load()
         self._unique_name(name, profiles)
         pid = self._free_id(name, profiles)
         chosen = clean_color(color) if color else self.next_color(profiles)
-        profile = Profile(pid, name, chosen, self.base / SUBFOLDER / pid, False)
-        profile.paths.ensure()  # config seeded from the shipped defaults; nothing else
+        folder = self.base / SUBFOLDER / pid if data_dir is None else Path(data_dir)
+        profile = Profile(pid, name, chosen, folder, False)
+        if seed:
+            profile.paths.ensure()  # config seeded from the shipped defaults; nothing else
         self._write([*profiles, profile])
         return profile
 

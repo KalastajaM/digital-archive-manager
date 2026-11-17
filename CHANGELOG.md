@@ -8,6 +8,15 @@ All notable changes are listed here. The format follows
 
 ### Added
 
+- **A data folder of your own for an archive.** **Add archive…** can keep the archive's
+  settings, index and logs in a folder you choose. A folder that already holds dam data
+  is used only after you confirm, with its documents folder shown; nothing is copied or
+  deleted. Cloud-synced folders, folders in use and data from a newer dam are refused.
+  New endpoint `POST /api/archives/data-folder-check`; `POST /api/archives` takes
+  `data_folder` and `use_existing_data`.
+- **Change folder…** on the main folder in Settings, Archive folders, for a documents
+  folder you moved. A check first says how many known top-level folders the new folder
+  lacks. New endpoint `POST /api/archive-folders/main`.
 - **Versions.** A file's panel says when a newer version of the document exists and lists the
   versions, with the latest marked (Word, Excel, PowerPoint, OpenDocument, Pages, Numbers,
   Keynote, RTF, text and Markdown files in one folder, by name; latest means last changed on

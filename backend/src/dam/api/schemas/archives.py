@@ -39,6 +39,24 @@ class ArchiveAddIn(StrictIn):
     color: str | None = Field(default=None, max_length=16)
     # build the fictional demo archive in this (new or empty) folder
     demo_folder: str | None = Field(default=None, max_length=4096)
+    # keep the archive's data (settings, index, logs) in this folder instead of dam's own
+    data_folder: str | None = Field(default=None, max_length=4096)
+    # the folder already holds dam data: the owner confirmed using it
+    use_existing_data: bool = False
+
+
+class DataFolderIn(StrictIn):
+    path: str = Field(max_length=4096)
+
+
+class DataFolderOut(BaseModel):
+    path: str | None
+    # new: nothing there yet (dam makes the data); dam_data: it holds dam data;
+    # refused: it cannot be used (message says why)
+    state: Literal["new", "dam_data", "refused"]
+    message: str
+    archive_root: str | None  # dam_data: the documents folder its settings name
+    archive_root_exists: bool | None  # ... and whether that folder is here
 
 
 class ArchiveUpdateIn(StrictIn):
@@ -129,6 +147,21 @@ class ArchiveFolderAddIn(StrictIn):
     label: str = Field(max_length=255)
     path: str = Field(max_length=4096)
     dry_run: bool = False
+
+
+class MainFolderChangeIn(StrictIn):
+    path: str = Field(max_length=4096)
+    dry_run: bool = False
+
+
+class MainFolderChangeOut(BaseModel):
+    """What moving the main folder changes (in a dry run: would change)."""
+
+    path: str
+    known: int  # top-level folders the index lists in the main folder
+    missing: int  # ... of which the new folder does not have
+    examples: list[str]  # a few of the missing names
+    restart_needed: bool  # the server could not reopen the archive itself
 
 
 class ArchiveFolderDetachIn(StrictIn):

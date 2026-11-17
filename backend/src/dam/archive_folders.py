@@ -354,3 +354,63 @@ def relabel_folder(
             engine.dispose()
     files = [(f.path.name, f.lines) for f in plan.files]
     return RelabelChange(target.label, new, plan.counts, files, plan.warnings)
+
+
+@dataclass
+class MainFolderChange:
+    """What pointing the archive at another main folder does (in a dry run: would do).
+
+    ``known`` is how many top-level folders of the main folder the index lists; ``missing``
+    how many of those are not in the new folder (``examples``: a few names). Nothing on
+    disk changes; the index is reconciled by the next scan."""
+
+    path: str
+    known: int
+    missing: int
+    examples: list[str]
+    reopen: bool
+
+
+def change_main_folder(
+    app_paths: AppPaths,
+    repo: FileRepo,
+    raw: str,
+    dry_run: bool,
+    *,
+    store: ProfileStore | None,
+    current_id: str | None,
+    home: Path | None = None,
+) -> MainFolderChange:
+    """Make ``raw`` the archive's main folder (the same folder moved or reached by another
+    path). It must pass the checks of a first set-up and may not touch this archive's own
+    extra folders."""
+    from dam import setup
+
+    settings, paths = _context(app_paths)
+    guard = store.root_guard(current_id) if store is not None else None
+    check = setup.check_archive_path(raw, app_paths, home, guard)
+    if not check.ok or check.path is None:
+        raise InvalidRequest(check.message or "That folder cannot be used.")
+    candidate = check.path
+    if related(candidate, Path(settings.archive_root)) == "same":
+        raise InvalidRequest("That is already the main folder.")
+    for folder in paths.folders:
+        if folder.label and (message := _overlap(related(candidate, folder.root), folder.label)):
+            raise InvalidRequest(message)
+    labels = {fold_name(e.label) for e in settings.extra_folders}
+    known = {
+        p.split("/", 1)[0]
+        for p in repo.dir_paths()
+        if p and fold_name(p.split("/", 1)[0]) not in labels
+    }
+    try:
+        present = {fold_name(e.name) for e in os.scandir(candidate)}
+    except OSError as e:
+        raise InvalidRequest(f"That folder cannot be read ({e.strerror or e}).") from None
+    missing = sorted(n for n in known if fold_name(n) not in present)
+    if not dry_run:
+        try:
+            setup.write_archive_root(app_paths, candidate)
+        except OSError as e:
+            raise InvalidRequest(f"Could not save the settings: {e}") from None
+    return MainFolderChange(str(candidate), len(known), len(missing), missing[:5], not dry_run)

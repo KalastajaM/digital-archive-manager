@@ -530,8 +530,29 @@ export const useArchives = (enabled = true) =>
   });
 
 /** Add an archive (it is not opened). ``demo_folder``: build the demo archive there. */
-export const addArchive = (name: string, color: string | null, demo_folder?: string) =>
-  apiPost("/api/archives", { body: { name, color, ...(demo_folder ? { demo_folder } : {}) } });
+export const addArchive = (
+  name: string,
+  color: string | null,
+  demo_folder?: string,
+  data_folder?: { path: string; useExisting: boolean },
+) =>
+  apiPost("/api/archives", {
+    body: {
+      name,
+      color,
+      ...(demo_folder ? { demo_folder } : {}),
+      ...(data_folder ? { data_folder: data_folder.path, use_existing_data: data_folder.useExisting } : {}),
+    },
+  });
+
+export type DataFolderCheck = Schemas["DataFolderOut"];
+/** What a folder would be as an archive's data folder (reads only). */
+export const checkDataFolder = (path: string) => apiPost("/api/archives/data-folder-check", { body: { path } });
+
+export type MainFolderChange = Schemas["MainFolderChangeOut"];
+/** Point the archive at another main folder (``dry_run``: only say what would be missing there). */
+export const changeMainFolder = (path: string, dry_run: boolean) =>
+  apiPost("/api/archive-folders/main", { body: { path, dry_run } });
 
 /** Open another archive in this server (409 when another window has it). */
 export const switchArchive = (id: string) => apiPost("/api/archives/{archive_id}/switch", { path: { archive_id: id } });

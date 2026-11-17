@@ -162,6 +162,11 @@ def _revision_problem(revision: str | None) -> str | None:
     return None
 
 
+def revision_is_known(revision: str | None) -> bool:
+    """Can this app open a database at ``revision`` (it migrates it up)?"""
+    return _revision_problem(revision) is None
+
+
 def db_revision(db: Path) -> str | None:
     con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
     try:

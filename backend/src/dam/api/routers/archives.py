@@ -16,6 +16,8 @@ from dam.api.schemas import (
     ArchivesOut,
     ArchiveSwitchOut,
     ArchiveUpdateIn,
+    DataFolderIn,
+    DataFolderOut,
 )
 
 router = APIRouter(prefix="/api/archives", tags=["archives"])
@@ -30,7 +32,23 @@ def list_archives(archives: ArchivesDep) -> dict:
 def add_archive(archives: ArchivesDep, body: ArchiveAddIn) -> dict:
     """Add an archive (not opened yet). With ``demo_folder``: builds the demo archive
     in that new or empty folder."""
-    return archives.add(body.name, body.color, body.demo_folder)
+    return archives.add(
+        body.name, body.color, body.demo_folder, body.data_folder, body.use_existing_data
+    )
+
+
+@router.post("/data-folder-check", response_model=DataFolderOut)
+def check_data_folder(archives: ArchivesDep, body: DataFolderIn) -> dict:
+    """What a folder would be as an archive's data folder: new, holding dam data, or not
+    usable (and why). Reads only."""
+    check = archives.check_data_folder(body.path)
+    return {
+        "path": str(check.path) if check.path else None,
+        "state": check.state,
+        "message": check.message,
+        "archive_root": check.archive_root,
+        "archive_root_exists": check.archive_root_exists,
+    }
 
 
 @router.post("/{archive_id}/switch", response_model=ArchiveSwitchOut)
