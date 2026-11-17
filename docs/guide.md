@@ -1975,7 +1975,10 @@ each area, grouped by what it applies to; one section shows at a time.
     delete or add rules, test a document from the inbox, and switch the offer to make a
     rule on or off. The **People** list is here too. See
     [Filing rules](#filing-rules).
-  - **Archive folders**: the main folder and any extra folders, each with its status
+  - **Archive folders**: the main folder (**Change folder…** points the archive at the
+    same documents after you moved them: dam checks the new folder first and says how many
+    of the folders it knows are not there; nothing on the disk changes) and any extra
+    folders, each with its status
     (Connected, Not connected or Detached), **Add folder**, **Detach**, **Attach again** and
     **Forget**. **Special folders** lists the Inbox, Ongoing, Important and
     To Delete folders, each with **Rename**. **Older versions folder** is the name of the subfolder that
@@ -2137,6 +2140,15 @@ nothing done in one can touch another.
 - **Switch**: choose an archive in the menu. The switch happens in the same window. Every
   archive but "Main" has a thin band in its colour along the top of the window, so a test
   archive is never mistaken for the real one.
+- **Choose where its data lives.** An archive keeps its settings, index and logs in a data
+  folder. dam makes one for each archive; in **Add archive…** you can choose **In a folder
+  I choose** instead. A new or empty folder gets a fresh archive. A folder that already
+  holds dam data (for example a copy from another computer) is not used until you confirm:
+  dam says which documents folder the data belongs to, and whether that folder is on this
+  computer. Nothing is copied or deleted. dam refuses a folder that is not empty and holds
+  no dam data, one inside a cloud-synced folder (the index is a database, and syncing
+  corrupts it), one that overlaps another archive, data a window is using now, and data
+  made by a newer dam or another build of dam.
 - **Manage archives…** renames, recolours, shows each archive's folders, and forgets an
   archive. **Forgetting deletes nothing**: both its folders are shown so you can remove
   them yourself if you want.

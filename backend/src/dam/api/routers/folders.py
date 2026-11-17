@@ -23,6 +23,8 @@ from dam.api.schemas import (
     ArchiveFolderRelabelIn,
     ArchiveFoldersOut,
     FolderChangeOut,
+    MainFolderChangeIn,
+    MainFolderChangeOut,
     RelabelOut,
 )
 from dam.app import App
@@ -58,6 +60,28 @@ def list_folders(app: AppDep) -> dict:
     """The main folder first, then every extra folder, detached ones included."""
     folders = archive_folders.list_folders(app.app_paths, app.repo)
     return {"folders": [asdict(f) for f in folders]}
+
+
+@router.post("/main", response_model=MainFolderChangeOut)
+def change_main_folder(app: AppDep, archives: ArchivesDep, body: MainFolderChangeIn) -> dict:
+    """Point the archive at another main folder (the same documents, moved). The dry run
+    says how many top-level folders of the index the new folder lacks; nothing on disk
+    changes either way. 400 with the reason when the folder cannot be used; 409 while a
+    job runs."""
+    with _not_busy(app):
+        change = archive_folders.change_main_folder(
+            app.app_paths,
+            app.repo,
+            body.path,
+            body.dry_run,
+            store=archives.store,
+            current_id=archives.current_id,
+            home=archives.home,
+        )
+        out = asdict(change)
+        out["restart_needed"] = change.reopen and not archives.reopen()
+        del out["reopen"]
+        return out
 
 
 @router.post("", response_model=FolderChangeOut)

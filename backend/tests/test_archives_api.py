@@ -368,3 +368,50 @@ def test_shutdown_stops_the_background_and_releases_the_lock(world, events):
 def test_app_create_still_works_on_a_plain_data_dir(app_paths):
     app = App.create(app_paths.data_dir)
     app.close()
+
+
+def test_a_data_folder_is_checked_then_used_for_a_new_archive(world, tmp_path):
+    host, c, store, arch_a, arch_b = unpack(world)
+    where = tmp_path / "elsewhere"
+    r = post(c, "/api/archives/data-folder-check", {"path": str(where)})
+    assert r.status_code == 200 and r.json()["state"] == "new" and not where.exists()
+    r = post(c, "/api/archives/data-folder-check", {"path": str(store.base)})
+    assert r.json()["state"] == "refused" and r.json()["message"]
+    r = post(c, "/api/archives", {"name": "Own", "data_folder": str(where)})
+    assert r.status_code == 200, r.text
+    assert r.json()["data_dir"] == str(where.resolve())
+    assert (where / "config" / "settings.yaml").is_file()
+    # a folder that holds dam data needs the owner's confirmation
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    setup.write_archive_root(AppPaths(where), docs)
+    store.forget("own")
+    r = post(c, "/api/archives/data-folder-check", {"path": str(where)})
+    assert r.json() == {
+        "path": str(where.resolve()),
+        "state": "dam_data",
+        "message": "",
+        "archive_root": str(docs),
+        "archive_root_exists": True,
+    }
+    r = post(c, "/api/archives", {"name": "Own", "data_folder": str(where)})
+    assert r.status_code == 400 and "already holds dam data" in r.json()["error"]
+    r = post(
+        c, "/api/archives", {"name": "Own", "data_folder": str(where), "use_existing_data": True}
+    )
+    assert r.status_code == 200 and r.json()["archive_root"] == str(docs)
+
+
+def test_the_main_folder_is_changed_with_a_preview_first(world, tmp_path):
+    host, c, store, arch_a, arch_b = unpack(world)
+    new = tmp_path / "moved"
+    new.mkdir()
+    r = post(c, "/api/archive-folders/main", {"path": str(new), "dry_run": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["missing"] == r.json()["known"] and r.json()["restart_needed"] is False
+    assert setup.current_archive_root(store.find("main").paths) == str(arch_a.root)
+    r = post(c, "/api/archive-folders/main", {"path": str(arch_a.root)})
+    assert r.status_code == 400
+    r = post(c, "/api/archive-folders/main", {"path": str(new)})
+    assert r.status_code == 200, r.text
+    assert setup.current_archive_root(store.find("main").paths) == str(new.resolve())

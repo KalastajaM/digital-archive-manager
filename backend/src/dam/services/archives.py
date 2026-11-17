@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from dam import demo, setup
+from dam import data_folders, demo, setup
 from dam.config import AppPaths
 from dam.core.paths import fold_name
 from dam.errors import Conflict, InvalidRequest, NotFound
@@ -123,12 +123,41 @@ class ArchiveService:
             raise InvalidRequest("That folder is not empty. Pick a new or empty folder.")
         return check.path
 
-    def add(self, name: str, color: str | None = None, demo_folder: str | None = None) -> dict:
+    def check_data_folder(self, raw: str) -> data_folders.DataFolderCheck:
+        return data_folders.check_data_folder(raw, self.store, self.home)
+
+    def add(
+        self,
+        name: str,
+        color: str | None = None,
+        demo_folder: str | None = None,
+        data_folder: str | None = None,
+        use_existing_data: bool = False,
+    ) -> dict:
         """Register a new archive (its data folder is made; not switched to). With
-        ``demo_folder``: also build the fictional demo archive there."""
+        ``demo_folder``: also build the fictional demo archive there. With
+        ``data_folder``: keep its data in that folder; a folder that already holds dam
+        data is used only with ``use_existing_data`` (nothing in it is changed here)."""
         self.store.check_new_name(name)
+        chosen = None
+        if data_folder:
+            if demo_folder:
+                raise InvalidRequest("A demo archive is built in a data folder of its own.")
+            check = self.check_data_folder(data_folder)
+            if check.state == "refused" or check.path is None:
+                raise InvalidRequest(check.message or "That folder cannot be used.")
+            if check.state == "dam_data" and not use_existing_data:
+                raise InvalidRequest(
+                    "That folder already holds dam data. Confirm that you want to use it."
+                )
+            chosen = check
         folder = self._demo_folder(demo_folder) if demo_folder else None
-        profile = self.store.add(name, color)
+        profile = self.store.add(
+            name,
+            color,
+            chosen.path if chosen else None,
+            seed=chosen is None or chosen.state == "new",
+        )
         if folder is not None:
             try:
                 if not folder.exists():

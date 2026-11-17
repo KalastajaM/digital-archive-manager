@@ -3793,6 +3793,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/archives/data-folder-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Data Folder
+         * @description What a folder would be as an archive's data folder: new, holding dam data, or not
+         *     usable (and why). Reads only.
+         */
+        post: operations["check_data_folder_api_archives_data_folder_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archives/{archive_id}/switch": {
         parameters: {
             query?: never;
@@ -3998,6 +4019,29 @@ export interface paths {
          *     409 while a maintenance check or rule replay runs.
          */
         post: operations["add_folder_api_archive_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/archive-folders/main": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Main Folder
+         * @description Point the archive at another main folder (the same documents, moved). The dry run
+         *     says how many top-level folders of the index the new folder lacks; nothing on disk
+         *     changes either way. 400 with the reason when the folder cannot be used; 409 while a
+         *     job runs.
+         */
+        post: operations["change_main_folder_api_archive_folders_main_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4917,6 +4961,13 @@ export interface components {
             color?: string | null;
             /** Demo Folder */
             demo_folder?: string | null;
+            /** Data Folder */
+            data_folder?: string | null;
+            /**
+             * Use Existing Data
+             * @default false
+             */
+            use_existing_data: boolean;
         };
         /** ArchiveExtraFolderOut */
         ArchiveExtraFolderOut: {
@@ -5791,6 +5842,27 @@ export interface components {
             adds: string[];
             /** Languages */
             languages: string[];
+        };
+        /** DataFolderIn */
+        DataFolderIn: {
+            /** Path */
+            path: string;
+        };
+        /** DataFolderOut */
+        DataFolderOut: {
+            /** Path */
+            path: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "dam_data" | "refused";
+            /** Message */
+            message: string;
+            /** Archive Root */
+            archive_root: string | null;
+            /** Archive Root Exists */
+            archive_root_exists: boolean | null;
         };
         /** DeleteBody */
         DeleteBody: {
@@ -7297,6 +7369,32 @@ export interface components {
             files: components["schemas"]["LockedFileOut"][];
             /** Folders */
             folders: string[];
+        };
+        /** MainFolderChangeIn */
+        MainFolderChangeIn: {
+            /** Path */
+            path: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /**
+         * MainFolderChangeOut
+         * @description What moving the main folder changes (in a dry run: would change).
+         */
+        MainFolderChangeOut: {
+            /** Path */
+            path: string;
+            /** Known */
+            known: number;
+            /** Missing */
+            missing: number;
+            /** Examples */
+            examples: string[];
+            /** Restart Needed */
+            restart_needed: boolean;
         };
         /** MaintenanceForgetOut */
         MaintenanceForgetOut: {
@@ -29648,6 +29746,102 @@ export interface operations {
             };
         };
     };
+    check_data_folder_api_archives_data_folder_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DataFolderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataFolderOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     switch_archive_api_archives__archive_id__switch_post: {
         parameters: {
             query?: never;
@@ -30704,6 +30898,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FolderChangeOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    change_main_folder_api_archive_folders_main_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MainFolderChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MainFolderChangeOut"];
                 };
             };
             /** @description Bad Request */
