@@ -22,14 +22,14 @@ dependencies = [
     "tzdata; sys_platform == 'win32'",  # zoneinfo has no system database on Windows
     "pillow",
     "numpy",  # picture areas: normalised cross-correlation (BSD)
-    "regex>=2026.11.9",
+    "regex>=2026.11.15",
     "keyring",
     "zxing-cpp==3.1.1",
-    "anthropic==2.6.0",
+    "anthropic==2.8.0",
     "openpyxl>=3.1.5",
     "xlrd>=2.0.2",
     "python-pptx>=1.0.2",
-    "httpx2>=2.16.0",  # ai/anthropic.py imports it directly
+    "httpx2>=2.16.2",  # ai/anthropic.py imports it directly
 ]
 
 [project.optional-dependencies]
