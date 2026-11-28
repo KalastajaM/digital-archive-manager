@@ -2284,7 +2284,9 @@ right-click the folder in the list or the folder tree and choose **Rename…**.
    file is kept as `settings.yaml.bak-<time>`), and stops for a few seconds while it opens
    the archive again.
    A message offers **Undo**; the change is also one entry in Activity, and its Undo puts the
-   folder, the rules, the filing codes, the settings and the index paths back.
+   folder, the rules, the filing codes, the settings and the index paths back. Before it
+   does, Activity asks **Undo the folder rename?** and says which folder gets which name
+   back, for example "The folder '2010' gets its old name '2009' back, in 20. Home."
 
 The name follows the same rules as a new folder, and it cannot be a name already in that
 folder: a rename never adds `_2`. A change of letter case alone (`bills` for `Bills`) is a
@@ -2313,7 +2315,9 @@ You can give them other names, for example `00. Inbox`:
 3. Click **Rename folder**. dam first takes a snapshot, then stops for a few seconds while it
    opens the archive again.
    A message offers **Undo**; the change is also one entry in Activity, and its Undo puts the
-   folder name, the settings, the rules and the index paths back.
+   folder name, the settings, the rules and the index paths back. Activity first asks
+   **Undo the folder rename?** and names the folder and the name it gets back ("The Inbox
+   folder '…' gets its old name '…' back.").
 
 A name may start with `##.` but need not. It cannot be the name of another special folder,
 of an archive folder, of the Expired folder or the older versions folder (rename those in Settings first), or of

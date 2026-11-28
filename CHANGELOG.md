@@ -70,12 +70,11 @@ All notable changes are listed here. The format follows
 
 ### Fixed
 
-- Undo of a folder rename in Activity asked "Undo these changes?" and said "New folders it
-  created stay, empty.", which does not fit a rename. It now asks **Undo the folder
-  rename?**, says which folder gets which name back (for a special folder, by its name in
-  the app) and that the index, rules, filing codes and settings that followed it go back
-  too. `GET /api/activity` gives a folder rename's batch `folder_rename` (`key`, `title`,
-  `old`, `new`); it is null for every other batch.
+- Undoing a folder rename in Activity asked "Undo these changes?" and said "New folders it
+  created stay, empty.", which made no sense for a rename. It now asks **Undo the folder
+  rename?**, says which folder gets which name back (a special folder by its name in the
+  app), and says that the rules, filing codes and settings that followed the folder go
+  back too. `GET /api/activity` now gives a folder rename's entry a `folder_rename` field.
 
 ## [1.0.0] - 2026-11-01
 
