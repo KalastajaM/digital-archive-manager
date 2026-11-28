@@ -51,6 +51,9 @@ class BatchSummary:
     # an undo batch: the batch it reverted, and that batch's label
     undo_of: str | None = None
     undoes_label: str | None = None
+    # a folder rename (in Browse or of a special folder): what was renamed, so the Undo
+    # confirm can say so; None for every other batch
+    folder_rename: special_folders.RenameRecord | None = None
 
 
 @dataclass
@@ -231,7 +234,11 @@ class ActivityService:
         return self._with_undone_labels([self._summary(batch_id, rows)])[0]
 
     def _with_undone_labels(self, batches: list[BatchSummary]) -> list[BatchSummary]:
-        """Fill ``undoes_label`` of the undo batches from the batches they reverted."""
+        """Fill ``undoes_label`` of the undo batches from the batches they reverted, and
+        ``folder_rename`` of the folder renames."""
+        renames = special_folders.records(self.executor.engine, [b.batch_id for b in batches])
+        for b in batches:
+            b.folder_rename = renames.get(b.batch_id)
         wanted = {b.undo_of for b in batches if b.undo_of}
         if not wanted:
             return batches

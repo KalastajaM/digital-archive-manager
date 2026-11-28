@@ -6,6 +6,7 @@ import type { BatchSummary, JournalEntry } from "../api/client";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { type Call, deferred, mockFetch, renderWithProviders as renderBare, undoButton } from "../test-utils";
 import { STATUS_ON } from "../components/ai/testData";
+import { renameUndoWords } from "../components/UndoConfirm";
 import Activity, {
   ACTIVITY_SEARCH_DEBOUNCE_MS,
   Highlight,
@@ -237,6 +238,54 @@ describe("Activity", () => {
     ]);
     expect(within(dialog).getByText("New folders it created stay, empty.")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Undo" })).toBeEnabled();
+  });
+
+  it("undoing a folder rename says which folder gets which name back, and what follows it", async () => {
+    const FOLDER = batch(
+      "r1",
+      [row("r1", { id: 9, kind: "rename", src: "20. Home/2009", dst: "20. Home/2010", drive_id: "f1", is_file: false })],
+      {
+        label: "Renamed folder 2009 to 2010",
+        folder_rename: { key: "folder", title: null, old: "20. Home/2009", new: "20. Home/2010" },
+      },
+    );
+    const calls = api({
+      "GET /api/activity": { body: [FOLDER] },
+      "POST /api/activity/r1/undo/preview": {
+        body: [{ kind: "rename", src: "20. Home/2010", dst: "20. Home/2009", drive_id: null, note: null }],
+      },
+      "POST /api/activity/r1/undo": { body: UNDO_RESULT },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<Activity />);
+    await user.click(within(await screen.findByRole("article", { name: "Batch r1" })).getByRole("button", { name: "Undo" }));
+    const dialog = await screen.findByRole("dialog", { name: "Undo the folder rename?" });
+    expect(await within(dialog).findByText("The folder '2010' gets its old name '2009' back, in 20. Home.")).toBeInTheDocument();
+    expect([...dialog.querySelectorAll(".plan-op")].map((li) => li.textContent)).toEqual([
+      "Rename20. Home/2010 → 20. Home/2009",
+    ]);
+    expect(
+      within(dialog).getByText(
+        "The index, rules, filing codes and settings that hold its path go back with it. dam stops for a few seconds while it opens the archive again.",
+      ),
+    ).toBeInTheDocument();
+    // the wording for undoing moves does not fit a rename: nothing was created, nothing stays
+    expect(within(dialog).queryByText("Undoing will:")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("New folders it created stay, empty.")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(posts(calls, "/api/activity/r1/undo")).toHaveLength(1));
+  });
+
+  it("undoing a special folder's rename names the folder by its title", () => {
+    expect(renameUndoWords({ key: "inbox", title: "Inbox", old: "##. Inbox", new: "##. Saapuneet" })).toEqual({
+      what: "The Inbox folder '##. Saapuneet' gets its old name '##. Inbox' back.",
+      follows:
+        "The settings, rules and index that hold its name go back with it. dam stops for a few seconds while it opens the archive again.",
+    });
+    // a folder at the top of the archive has no parent to name
+    expect(renameUndoWords({ key: "folder", title: null, old: "20. Home", new: "21. House" }).what).toBe(
+      "The folder '21. House' gets its old name '20. Home' back.",
+    );
   });
 
   it("a refused undo preview says why and disables Undo, also for ⌘Enter", async () => {

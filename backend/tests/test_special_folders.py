@@ -224,6 +224,9 @@ def test_rename_and_undo_each_special_folder(
     summary = app.activity.get(body["batch_id"])
     assert summary.undoable
     assert summary.label == f"Renamed the {body['title']} folder from {old} to {new}"
+    # Activity names the rename, so the Undo confirm can say which name comes back
+    listed = next(b for b in c.get("/api/activity").json() if b["batch_id"] == body["batch_id"])
+    assert listed["folder_rename"] == {"key": key, "title": body["title"], "old": old, "new": new}
     assert archive_guard.state.violations == []
 
     u = post(c, f"/api/activity/{body['batch_id']}/undo")

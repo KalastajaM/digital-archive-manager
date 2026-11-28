@@ -737,7 +737,7 @@ export default function Activity() {
             batches={batches}
             words={words}
             undoBusy={undo.pending}
-            onUndo={(b) => undo.open({ batchId: b.batch_id })}
+            onUndo={(b) => undo.open({ batchId: b.batch_id, rename: b.folder_rename })}
             isExpanded={isExpanded}
             onToggle={toggle}
           />

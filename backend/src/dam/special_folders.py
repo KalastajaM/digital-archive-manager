@@ -1057,6 +1057,32 @@ def is_rename(engine: Engine, batch_id: str) -> bool:
     return _row(engine, batch_id) is not None
 
 
+@dataclass
+class RenameRecord:
+    """What a rename batch renamed, for Activity's Undo confirm: ``key`` is ``folder`` (an
+    ordinary folder renamed in Browse; ``old`` and ``new`` are its archive paths) or a
+    special folder's key (``title`` is its name in the app; ``old`` and ``new`` are names)."""
+
+    key: str
+    title: str | None
+    old: str
+    new: str
+
+
+def records(engine: Engine, batch_ids: list[str]) -> dict[str, RenameRecord]:
+    """The folder renames among ``batch_ids``, by batch id (one query in all)."""
+    if not batch_ids:
+        return {}
+    t = special_folder_renames
+    with engine.connect() as conn:
+        rows = conn.execute(
+            select(t.c.batch_id, t.c.key, t.c.old, t.c.new).where(t.c.batch_id.in_(batch_ids))
+        ).all()
+    return {
+        row.batch_id: RenameRecord(row.key, TITLES.get(row.key), row.old, row.new) for row in rows
+    }
+
+
 def undo(app_paths: AppPaths, batch_id: str):
     """Undo the rename ``batch_id``: the executor renames the folder(s) back, then exactly
     the recorded values in the settings, rules and stored paths are put back. Call with the

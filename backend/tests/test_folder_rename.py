@@ -141,6 +141,18 @@ def test_renames_the_folder_and_undo_puts_it_back(served, fake_archive):
     ]
     summary = app.activity.get(body["batch_id"])
     assert summary.undoable and summary.label == "Renamed folder 2009 to 2010"
+    # Activity names the rename (paths, as recorded), so the Undo confirm can say which
+    # folder gets which name back; a batch that is no folder rename has none
+    listed = {b["batch_id"]: b for b in c.get("/api/activity").json()}
+    assert listed[body["batch_id"]]["folder_rename"] == {
+        "key": "folder",
+        "title": None,
+        "old": FOLDER,
+        "new": f"{HOME}/2010",
+    }
+    assert all(
+        b["folder_rename"] is None for bid, b in listed.items() if bid != body["batch_id"]
+    )
     assert archive_guard.state.violations == []
 
     undo(c, body["batch_id"])

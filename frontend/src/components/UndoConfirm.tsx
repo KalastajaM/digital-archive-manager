@@ -1,14 +1,18 @@
-/** Undo of a journaled batch, always behind the "Undo these changes?" confirm.
+/** Undo of a journaled batch, always behind the "Undo these changes?" confirm (for a
+ * folder rename, "Undo the folder rename?", naming the folder's new and old name).
  *
  * One app-level provider owns the confirm, the request and the ``undoing`` guard, so a
  * toast's Undo still works after navigating away, and only one undo ever runs app-wide. */
 import { createContext, type ReactNode, type RefObject, useContext, useRef, useState } from "react";
-import { errorText, useUndo, useUndoPreview } from "../api/client";
+import { errorText, type FolderRenameRecord, useUndo, useUndoPreview } from "../api/client";
+import { parentOf } from "../paths";
 import { visible } from "../text";
 import { ConfirmPlan, PlanList } from "./PlanPreview";
 import { useToast } from "./Toasts";
 
-export type UndoTarget = { batchId: string };
+/** ``rename``: the batch is a folder rename (Activity's ``folder_rename``), so the confirm
+ * says which folder gets which name back. */
+export type UndoTarget = { batchId: string; rename?: FolderRenameRecord | null };
 type Request = { target: UndoTarget; onUndone?: (batchId: string) => void };
 
 type UndoState = {
@@ -77,6 +81,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
         <UndoSheet
           key={request.target.batchId}
           batchId={request.target.batchId}
+          rename={request.target.rename ?? null}
           running={undo.isPending}
           onConfirm={() => void run(request)}
           onCancel={() => setRequest(null)}
@@ -86,16 +91,41 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const lastName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** What undoing a folder rename does, in words: the folder that gets its old name back,
+ * and what goes back with it. ``old`` and ``new`` are archive paths for a folder renamed
+ * in Browse, names for a special folder. */
+export function renameUndoWords(r: FolderRenameRecord): { what: string; follows: string } {
+  if (r.key === "folder") {
+    const where = parentOf(r.old);
+    return {
+      what:
+        `The folder '${visible(lastName(r.new))}' gets its old name '${visible(lastName(r.old))}' back` +
+        (where ? `, in ${visible(where)}.` : "."),
+      follows:
+        "The index, rules, filing codes and settings that hold its path go back with it. dam stops for a few seconds while it opens the archive again.",
+    };
+  }
+  return {
+    what: `The ${r.title ?? "special"} folder '${visible(r.new)}' gets its old name '${visible(r.old)}' back.`,
+    follows:
+      "The settings, rules and index that hold its name go back with it. dam stops for a few seconds while it opens the archive again.",
+  };
+}
+
 /** The confirm, showing the server's undo preview: the exact ops undo will run. Undo
  * stays disabled until the preview has arrived, and for good when it is refused (the
- * reason is shown). */
+ * reason is shown). A folder rename says in words which folder gets which name back. */
 function UndoSheet({
   batchId,
+  rename,
   running,
   onConfirm,
   onCancel,
 }: {
   batchId: string;
+  rename: FolderRenameRecord | null;
   running: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -108,6 +138,15 @@ function UndoSheet({
       <p className="error" role="alert">
         Cannot undo: {visible(errorText(preview.error))}
       </p>
+    );
+  } else if (rename) {
+    const words = renameUndoWords(rename);
+    body = (
+      <>
+        <p>{words.what}</p>
+        <PlanList ops={preview.data} />
+        <p className="hint">{words.follows}</p>
+      </>
     );
   } else {
     body = (
@@ -125,7 +164,7 @@ function UndoSheet({
   return (
     <ConfirmPlan
       planKey={batchId}
-      title="Undo these changes?"
+      title={rename ? "Undo the folder rename?" : "Undo these changes?"}
       confirmLabel="Undo"
       ops={preview.data ?? []}
       busy={running || !preview.isSuccess}
