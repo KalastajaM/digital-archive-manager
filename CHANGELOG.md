@@ -68,6 +68,14 @@ All notable changes are listed here. The format follows
   `config/trays/` and Settings → Filing codes); items in the tray stay where they are. The
   `nudge_after_days` tray setting still works for a tray of your own.
 
+### Fixed
+
+- Undoing a folder rename in Activity asked "Undo these changes?" and said "New folders it
+  created stay, empty.", which made no sense for a rename. It now asks **Undo the folder
+  rename?**, says which folder gets which name back (a special folder by its name in the
+  app), and says that the rules, filing codes and settings that followed the folder go
+  back too. `GET /api/activity` now gives a folder rename's entry a `folder_rename` field.
+
 ## [1.0.0] - 2026-11-01
 
 The 1.0 release. In short:

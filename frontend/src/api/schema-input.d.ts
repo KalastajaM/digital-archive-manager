@@ -5392,6 +5392,7 @@ export interface components {
             undo_of?: string | null;
             /** Undoes Label */
             undoes_label?: string | null;
+            folder_rename?: components["schemas"]["FolderRenameRecordOut"] | null;
         };
         /** BrokenLinkOut */
         BrokenLinkOut: {
@@ -6690,6 +6691,22 @@ export interface components {
             undo: string;
             /** Batch Id */
             batch_id?: string | null;
+        };
+        /**
+         * FolderRenameRecordOut
+         * @description A folder rename in Activity. ``key``: "folder" for a folder renamed in Browse
+         *     (``old`` and ``new`` are archive paths), else the special folder's key (``title`` is its
+         *     name in the app; ``old`` and ``new`` are folder names).
+         */
+        FolderRenameRecordOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string | null;
+            /** Old */
+            old: string;
+            /** New */
+            new: string;
         };
         /**
          * FoundOut

@@ -651,6 +651,17 @@ class JournalEntryOut(BaseModel):
     file_now: FileNowOut | None = None
 
 
+class FolderRenameRecordOut(BaseModel):
+    """A folder rename in Activity. ``key``: "folder" for a folder renamed in Browse
+    (``old`` and ``new`` are archive paths), else the special folder's key (``title`` is its
+    name in the app; ``old`` and ``new`` are folder names)."""
+
+    key: str
+    title: str | None
+    old: str
+    new: str
+
+
 class BatchSummaryOut(BaseModel):
     batch_id: str
     created: float
@@ -662,6 +673,8 @@ class BatchSummaryOut(BaseModel):
     label: str | None = None
     undo_of: str | None = None
     undoes_label: str | None = None
+    # a folder rename: what was renamed (null for every other batch)
+    folder_rename: FolderRenameRecordOut | None = None
 
 
 class RecoveryResultOut(BaseModel):

@@ -115,6 +115,7 @@ export type DirEntry = Schemas["DirEntryOut"];
 export type SearchHit = Schemas["SearchHitOut"];
 export type JournalEntry = Schemas["JournalEntryOut"];
 export type BatchSummary = Schemas["BatchSummaryOut"];
+export type FolderRenameRecord = Schemas["FolderRenameRecordOut"];
 export type QuarantineBody = Schemas["QuarantineBody"];
 export type RestoreBody = Schemas["RestoreBody"];
 export type UnusedPicturesBody = Schemas["UnusedPicturesIn"];
